@@ -16,8 +16,8 @@ import {
 	DidChangeConfigurationNotification, ConfigurationItem, DocumentLinkParams, DocumentLink, MarkupKind,
 	VersionedTextDocumentIdentifier, TextDocumentEdit, CodeAction, CodeActionKind, FoldingRangeRequestParam, ProposedFeatures
 } from 'vscode-languageserver';
-import { ValidatorSettings, ValidationSeverity } from 'dockerfile-utils';
-import { CommandIds, DockerfileLanguageServiceFactory } from 'dockerfile-language-service';
+import { ValidatorSettings, ValidationSeverity } from '../../dockerfile-utils/src/main';
+import { CommandIds, DockerfileLanguageServiceFactory } from '../../dockerfile-language-service/src/main';
 import { SemanticTokenModifiers, SemanticTokenTypes, SemanticTokensParams } from "vscode-languageserver-protocol/lib/protocol.sematicTokens.proposed";
 
 /**
@@ -268,7 +268,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 			} : undefined,
 			foldingRangeProvider: true
 		} as any
-	}
+	};
 });
 
 function convertValidatorConfiguration(config: ValidatorConfiguration): ValidatorSettings {
@@ -319,15 +319,15 @@ function validateTextDocument(textDocument: TextDocument): void {
 }
 
 interface ValidatorConfiguration {
-	deprecatedMaintainer?: string,
-	directiveCasing?: string,
-	emptyContinuationLine?: string,
-	instructionCasing?: string,
-	instructionCmdMultiple?: string,
-	instructionEntrypointMultiple?: string,
-	instructionHealthcheckMultiple?: string,
-	instructionJSONInSingleQuotes?: string,
-	instructionWorkdirRelative?: string
+	deprecatedMaintainer?: string;
+	directiveCasing?: string;
+	emptyContinuationLine?: string;
+	instructionCasing?: string;
+	instructionCmdMultiple?: string;
+	instructionEntrypointMultiple?: string;
+	instructionHealthcheckMultiple?: string;
+	instructionJSONInSingleQuotes?: string;
+	instructionWorkdirRelative?: string;
 }
 
 interface Settings {
@@ -335,7 +335,7 @@ interface Settings {
 		languageserver: {
 			diagnostics?: ValidatorConfiguration
 		}
-	}
+	};
 }
 
 function getSeverity(severity: string | undefined): ValidationSeverity | null {
@@ -471,7 +471,7 @@ connection.onCodeAction((codeActionParams: CodeActionParams): Command[] | Promis
 					let codeAction: CodeAction = {
 						title: command.title,
 						kind: CodeActionKind.QuickFix
-					}
+					};
 					let edit = computeWorkspaceEdit(codeActionParams.textDocument.uri, document, command.command, command.arguments);
 					if (edit) {
 						codeAction.edit = edit;
@@ -625,7 +625,7 @@ connection.languages.semanticTokens.on((semanticTokenParams: SemanticTokensParam
 		}
 		return {
 			data: []
-		}
+		};
 	});
 });
 
