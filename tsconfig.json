@@ -15,6 +15,8 @@
 	],
 	"references": [
 		{ "path": "./client" },
-		{ "path": "./server" }
+		{ "path": "./dockerfile-language-server-nodejs" },
+		{ "path": "./dockerfile-language-service" },
+		{ "path": "./dockerfile-utils" }
 	]
 }
