@@ -47,13 +47,14 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "cd client && npm run update-vscode && cd .. && npm run compile",
-		"compile": "tsc -p . && tsc -p tsconfig.client.json && tsc -p tsconfig.dockerfile-language-server-nodejs.json && tsc -p tsconfig.dockerfile-language-service.json && tsc -p tsconfig.dockerfile-utils.json",
-		"watch": "tsc -b -w",
-		"postinstall": "cd client && npm install && cd ../dockerfile-language-server-nodejs && npm install && cd ../dockerfile-language-service && npm install && cd ../dockerfile-utils && npm install && cd .."
+		"compile": "concurrently \"tsc -p .\" \"tsc -p tsconfig.client.json\"",
+		"watch": "concurrently \"tsc -p . -w\" \"tsc -p tsconfig.client.json -w\"",
+		"postinstall": "concurrently \"cd client && npm install\" \"cd dockerfile-language-server-nodejs && npm install\" \"cd dockerfile-language-service && npm install\" \"cd dockerfile-utils && npm install\""
 	},
 	"devDependencies": {
 		"@types/mocha": "^5.2.7",
 		"@types/node": "^12.11.7",
+		"concurrently": "^5.1.0",
 		"tslint": "^5.16.0",
 		"typescript": "^3.6.4"
 	}

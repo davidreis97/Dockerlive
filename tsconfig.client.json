@@ -1,5 +1,8 @@
 {
 	"extends": "./tsconfig.json",
+	"include": [
+		"./client"
+	],
 	"exclude": [
 		"./dockerfile-language-server-nodejs",
 		"./dockerfile-language-service",

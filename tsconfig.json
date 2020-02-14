@@ -3,10 +3,9 @@
 		"module": "commonjs",
 		"target": "es6",
 		"sourceMap": true,
-		"noEmit": true,		
+		"outDir": "out"	
 	},
 	"include": [
-		"client",
 		"dockerfile-language-server-nodejs",
 		"dockerfile-language-service",
 		"dockerfile-utils"
