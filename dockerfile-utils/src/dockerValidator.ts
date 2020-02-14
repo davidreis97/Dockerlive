@@ -7,6 +7,7 @@ import {
 } from 'vscode-languageserver-types';
 import { Dockerfile, Flag, Instruction, JSONInstruction, Add, Arg, Cmd, Copy, Entrypoint, From, Healthcheck, Onbuild, ModifiableInstruction, PropertyInstruction, Property, DockerfileParser, Directive, Keyword } from 'dockerfile-ast';
 import { ValidationCode, ValidationSeverity, ValidatorSettings } from './main';
+import Dockerode from 'dockerode';
 
 export const KEYWORDS = [
     "ADD",
@@ -31,6 +32,8 @@ export const KEYWORDS = [
 
 export class Validator {
 
+    private docker: Dockerode;
+
     private document: TextDocument;
 
     private settings: ValidatorSettings = {
@@ -49,6 +52,8 @@ export class Validator {
         if (settings) {
             this.settings = settings;
         }
+
+        this.docker = new Dockerode();
     }
 
     private checkDirectives(dockerfile: Dockerfile, problems: Diagnostic[]) {
@@ -318,6 +323,7 @@ export class Validator {
         for (let instruction of dockerfile.getOnbuildTriggers()) {
             this.validateInstruction(document, escapeChar, instruction, instruction.getKeyword(), true, problems);
         }
+
         return problems;
     }
 

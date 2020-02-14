@@ -2,7 +2,8 @@
 	"extends": "./tsconfig.json",
 	"compilerOptions":{
 		"noEmit": false,
-		"outDir": "./dockerfile-language-service/out"
+		"outDir": "./dockerfile-language-service/out",
+		"esModuleInterop":true
 	},
 	"exclude": [
 		"./client",

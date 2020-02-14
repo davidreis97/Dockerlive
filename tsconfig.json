@@ -3,7 +3,8 @@
 		"module": "commonjs",
 		"target": "es6",
 		"sourceMap": true,
-		"noEmit": true	
+		"noEmit": true,
+		"esModuleInterop":true
 	},
 	"include": [
 		"dockerfile-language-server-nodejs",
