@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 import {
-    Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, Location, DocumentHighlight, SymbolInformation, SignatureHelp, TextEdit, DocumentLink, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange
+    Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, Location, DocumentHighlight, SymbolInformation, SignatureHelp, TextEdit, DocumentLink, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange, TextDocument
 } from 'vscode-languageserver-types';
 import { ValidatorSettings } from '../../dockerfile-utils/src/main';
 import { LanguageService } from './languageService';
@@ -129,7 +129,7 @@ export interface DockerfileLanguageService {
      */
     computeSemanticTokens(content: string): SemanticTokens;
 
-    validate(content: string, settings?: ValidatorSettings): Diagnostic[];
+    validate(document: TextDocument, settings?: ValidatorSettings): Diagnostic[];
 
     format(content: string, options: FormattingOptions): TextEdit[];
 

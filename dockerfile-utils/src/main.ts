@@ -190,8 +190,7 @@ export function format(content: string, options: FormattingOptions): TextEdit[] 
 /**
  * Validates the Dockerfile that is contained in the given string.
  */
-export function validate(content: string, settings?: ValidatorSettings): Diagnostic[] {
-    const document = TextDocument.create("", "", 0, content);
+export function validate(document: TextDocument, settings?: ValidatorSettings): Diagnostic[] {
     const validator = new Validator(settings);
     return validator.validate(document);
 }

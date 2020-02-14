@@ -26,7 +26,7 @@ function validateDockerfile(content: string, settings?: ValidatorSettings) {
             instructionWorkdirRelative: ValidationSeverity.WARNING,
         };
     }
-    return validate(content, settings);
+    return validate(TextDocument.create("","",0,content), settings);
 }
 
 function convertValidationSeverity(severity: ValidationSeverity): DiagnosticSeverity {
@@ -1780,32 +1780,32 @@ describe("Docker Validator Tests", function() {
             let instructionLength = instruction.length;
 
             it("default", function() {
-                let diagnostics = validate(content);
+                let diagnostics = validate(TextDocument.create("","",0,content));
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Warning, 1, instructionLength + 1, 1, instructionLength + 22);
 
-                diagnostics = validate("FROM busybox\n" + instruction + " ['/bin/bash', 'echo',]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM busybox\n" + instruction + " ['/bin/bash', 'echo',]"));
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Warning, 1, instructionLength + 1, 1, instructionLength + 23);
 
-                diagnostics = validate("FROM busybox\n" + instruction + " [ '],',]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM busybox\n" + instruction + " [ '],',]"));
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Warning, 1, instructionLength + 1, 1, instructionLength + 9);
             });
 
             it("ignore", function() {
-                let diagnostics = validate(content, { instructionJSONInSingleQuotes: ValidationSeverity.IGNORE });
+                let diagnostics = validate(TextDocument.create("","",0,content), { instructionJSONInSingleQuotes: ValidationSeverity.IGNORE });
                 assert.equal(diagnostics.length, 0);
             });
 
             it("warning", function() {
-                let diagnostics = validate(content, { instructionJSONInSingleQuotes: ValidationSeverity.WARNING });
+                let diagnostics = validate(TextDocument.create("","",0,content), { instructionJSONInSingleQuotes: ValidationSeverity.WARNING });
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Warning, 1, instructionLength + 1, 1, instructionLength + 22);
             });
 
             it("error", function() {
-                let diagnostics = validate(content, { instructionJSONInSingleQuotes: ValidationSeverity.ERROR });
+                let diagnostics = validate(TextDocument.create("","",0,content), { instructionJSONInSingleQuotes: ValidationSeverity.ERROR });
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Error, 1, instructionLength + 1, 1, instructionLength + 22);
             });
@@ -2192,49 +2192,49 @@ describe("Docker Validator Tests", function() {
     describe("CMD", function() {
         describe("arguments", function() {
             it("ok", function() {
-                let diagnostics = validate("FROM alpine\nCMD [ t.txt");
+                let diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ t.txt"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD '");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD '"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ [");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ ["));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD , [ ]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD , [ ]"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '],', '[]'");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '],', '[]'"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '''");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '''"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD ]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD ]"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ ,,");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ ,,"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '\\a");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '\\a"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '\\\" \\ \t\na ]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '\\\" \\ \t\na ]"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '\\\" \\ \t\r\na ]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '\\\" \\ \t\r\na ]"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '\\\" \\ \t\n a ]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '\\\" \\ \t\n a ]"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ '\\\" \\ \t\r\n a ]");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ '\\\" \\ \t\r\n a ]"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ 'asdfasdf' , 's  sdfsfd \\ ', \\\n  'sdfsdf'");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ 'asdfasdf' , 's  sdfsfd \\ ', \\\n  'sdfsdf'"));
                 assert.equal(diagnostics.length, 0);
 
-                diagnostics = validate("FROM alpine\nCMD [ \\a");
+                diagnostics = validate(TextDocument.create("","",0,"FROM alpine\nCMD [ \\a"));
                 assert.equal(diagnostics.length, 0);
             });
         });
@@ -3871,11 +3871,11 @@ describe("Docker Validator Tests", function() {
             assert.equal(diagnostics.length, 1);
             assertShellJsonForm(diagnostics[0], 1, 6, 1, 17);
 
-            diagnostics = validate("FROM busybox\nSHELL \\a");
+            diagnostics = validate(TextDocument.create("","",0,"FROM busybox\nSHELL \\a"));
             assert.equal(diagnostics.length, 1);
             assertShellJsonForm(diagnostics[0], 1, 6, 1, 8);
 
-            diagnostics = validate("FROM busybox\nSHELL a \\ a");
+            diagnostics = validate(TextDocument.create("","",0,"FROM busybox\nSHELL a \\ a"));
             assert.equal(diagnostics.length, 1);
             assertShellJsonForm(diagnostics[0], 1, 6, 1, 11);
         });

@@ -8,6 +8,8 @@ import {
 import { Dockerfile, Flag, Instruction, JSONInstruction, Add, Arg, Cmd, Copy, Entrypoint, From, Healthcheck, Onbuild, ModifiableInstruction, PropertyInstruction, Property, DockerfileParser, Directive, Keyword } from 'dockerfile-ast';
 import { ValidationCode, ValidationSeverity, ValidatorSettings } from './main';
 import Dockerode from 'dockerode';
+import uri2path = require('file-uri-to-path');
+import path = require('path');
 
 export const KEYWORDS = [
     "ADD",
@@ -81,7 +83,7 @@ export class Validator {
                     const range = directive.getValueRange();
                     problems.push(Validator.createInvalidEscapeDirective(range.start, range.end, value));
                 }
-    
+
                 if (directive.getName() !== Directive.escape) {
                     const range = directive.getNameRange();
                     const diagnostic = this.createLowercaseDirective(range.start, range.end);
@@ -324,6 +326,20 @@ export class Validator {
             this.validateInstruction(document, escapeChar, instruction, instruction.getKeyword(), true, problems);
         }
 
+        const dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1); //Substring removes initial '/'
+        const filename = path.basename(dockerfilePath);
+        const directory = path.dirname(dockerfilePath);
+
+        if(problems.length == 0){ //If static anslysis does not detect any problems, attempt to build the image
+            this.docker.buildImage({
+                context: directory,
+                src: [filename]
+            }, { t: "testimage" }, (error, response) => { 
+                console.log(error);
+                console.log(response);
+            });
+        }
+        
         return problems;
     }
 
@@ -429,7 +445,7 @@ export class Validator {
                             problems.push(Validator.createUnknownFromFlag(range.start, flagName === "" ? range.end : flag.getNameRange().end, flag.getName()));
                         }
                     }
-                    this.checkFlagValue(fromFlags, [ "platform"], problems);
+                    this.checkFlagValue(fromFlags, ["platform"], problems);
                     this.checkArguments(instruction, problems, [1, 3], function (index: number, argument: string, range: Range): Diagnostic | Function | null {
                         switch (index) {
                             case 0:
@@ -437,9 +453,9 @@ export class Validator {
                                 if (variables.length > 0) {
                                     let variableRange = variables[0].getRange();
                                     if (variableRange.start.line === range.start.line
-                                            && variableRange.start.character === range.start.character
-                                            && variableRange.end.line === range.end.line
-                                            && variableRange.end.character === range.end.character) {
+                                        && variableRange.start.character === range.start.character
+                                        && variableRange.end.line === range.end.line
+                                        && variableRange.end.character === range.end.character) {
                                         if (!variables[0].isDefined()) {
                                             return Validator.createBaseNameEmpty(variableRange, variables[0].toString());
                                         }
@@ -758,7 +774,7 @@ export class Validator {
             if (variables.length !== 0) {
                 const lastJsonStringOffset = this.document.offsetAt(lastArg.getRange().end);
                 const lastVarOffset = this.document.offsetAt(variables[variables.length - 1].getRange().end);
-                if (lastJsonStringOffset === lastVarOffset || lastJsonStringOffset -1 === lastVarOffset) {
+                if (lastJsonStringOffset === lastVarOffset || lastJsonStringOffset - 1 === lastVarOffset) {
                     return null;
                 }
             }
@@ -784,7 +800,7 @@ export class Validator {
                 const lastVar = variables[variables.length - 1];
                 const lastJsonStringOffset = this.document.offsetAt(lastJsonString.getRange().end);
                 const lastVarOffset = this.document.offsetAt(lastVar.getRange().end);
-                if (lastJsonStringOffset === lastVarOffset || lastJsonStringOffset -1 === lastVarOffset) {
+                if (lastJsonStringOffset === lastVarOffset || lastJsonStringOffset - 1 === lastVarOffset) {
                     return null;
                 }
             }

@@ -309,11 +309,11 @@ function validateTextDocument(textDocument: TextDocument): void {
 	if (configurationSupport) {
 		getConfiguration(textDocument.uri).then((config: ValidatorConfiguration) => {
 			const fileSettings = convertValidatorConfiguration(config);
-			const diagnostics = service.validate(textDocument.getText(), fileSettings);
+			const diagnostics = service.validate(textDocument, fileSettings);
 			connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 		});
 	} else {
-		const diagnostics = service.validate(textDocument.getText(), validatorSettings);
+		const diagnostics = service.validate(textDocument, validatorSettings);
 		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 	}
 }

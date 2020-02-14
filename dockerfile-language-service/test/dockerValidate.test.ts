@@ -4,7 +4,7 @@
  * ------------------------------------------------------------------------------------------ */
 import * as assert from "assert";
 
-import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver-types';
+import { Diagnostic, DiagnosticSeverity, TextDocument } from 'vscode-languageserver-types';
 import { ValidationCode, ValidationSeverity } from '../../dockerfile-utils/src/main';
 import { DockerfileLanguageServiceFactory } from '../src/main';
 
@@ -17,28 +17,28 @@ function assertInstructionCasing(diagnostic: Diagnostic, severity: DiagnosticSev
 
 describe("Docker Validation Tests", () => {
     it("settings ignore case default", () => {
-        let content = "from node";
-        let problems = service.validate(content);
+        let document = TextDocument.create("","",0,"from node");
+        let problems = service.validate(document);
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Warning);
     });
 
     it("settings ignore case ignore", () => {
-        let content = "from node";
-        let problems = service.validate(content, { instructionCasing: ValidationSeverity.IGNORE });
+        let document = TextDocument.create("","",0,"from node");
+        let problems = service.validate(document, { instructionCasing: ValidationSeverity.IGNORE });
         assert.equal(0, problems.length);
     });
 
     it("settings ignore case warning", () => {
-        let content = "from node";
-        let problems = service.validate(content, { instructionCasing: ValidationSeverity.WARNING });
+        let document = TextDocument.create("","",0,"from node");
+        let problems = service.validate(document, { instructionCasing: ValidationSeverity.WARNING });
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Warning);
     });
 
     it("settings ignore case error", () => {
-        let content = "from node";
-        let problems = service.validate(content, { instructionCasing: ValidationSeverity.ERROR });
+        let document = TextDocument.create("","",0,"from node");
+        let problems = service.validate(document, { instructionCasing: ValidationSeverity.ERROR });
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Error);
     });
