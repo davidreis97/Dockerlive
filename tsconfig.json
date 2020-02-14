@@ -2,21 +2,21 @@
 	"compilerOptions": {
 		"module": "commonjs",
 		"target": "es6",
-		"outDir": "out",
-		"rootDir": "src",
-		"sourceMap": true
+		"sourceMap": true,
+		"noEmit": true,		
 	},
 	"include": [
-		"src"
+		"client",
+		"dockerfile-language-server-nodejs",
+		"dockerfile-language-service",
+		"dockerfile-utils"
 	],
 	"exclude": [
 		"node_modules",
-		".vscode-test"
-	],
-	"references": [
-		{ "path": "./client" },
-		{ "path": "./dockerfile-language-server-nodejs" },
-		{ "path": "./dockerfile-language-service" },
-		{ "path": "./dockerfile-utils" }
+		".vscode-test",
+		"client/node_modules",
+		"dockerfile-language-server-nodejs/node_modules",
+		"dockerfile-language-service/node_modules",
+		"dockerfile-utils/node_modules"
 	]
 }

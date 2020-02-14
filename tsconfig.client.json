@@ -1,0 +1,12 @@
+{
+	"extends": "./tsconfig.json",
+	"exclude": [
+		"./dockerfile-language-server-nodejs",
+		"./dockerfile-language-service",
+		"./dockerfile-utils",
+	],
+	"compilerOptions":{
+		"noEmit": false,
+		"outDir": "./client/out"
+	}
+}

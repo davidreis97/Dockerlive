@@ -6,7 +6,7 @@ import { DockerfileLanguageService, ILogger, Capabilities } from "./main";
 import {
     TextDocument, Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, WorkspaceEdit, Location, DocumentHighlight, SymbolInformation, SignatureHelp, DocumentLink, TextEdit, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange
 } from "vscode-languageserver-types";
-import * as DockerfileUtils from 'dockerfile-utils';
+import * as DockerfileUtils from '../../dockerfile-utils/src/main';
 import { DockerAssist } from "./dockerAssist";
 import { DockerRegistryClient } from "./dockerRegistryClient";
 import { DockerCommands } from "./dockerCommands";

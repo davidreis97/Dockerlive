@@ -5,7 +5,7 @@
 import * as assert from "assert";
 
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver-types';
-import { ValidationCode, ValidationSeverity } from 'dockerfile-utils';
+import { ValidationCode, ValidationSeverity } from '../../dockerfile-utils/src/main';
 import { DockerfileLanguageServiceFactory } from '../src/main';
 
 const service = DockerfileLanguageServiceFactory.createLanguageService();

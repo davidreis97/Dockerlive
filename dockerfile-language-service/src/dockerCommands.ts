@@ -5,7 +5,7 @@
 'use strict';
 
 import { TextDocument, Command, Diagnostic, Range, TextEdit } from 'vscode-languageserver-types';
-import { ValidationCode } from 'dockerfile-utils';
+import { ValidationCode } from '../../dockerfile-utils/src/main';
 import { CommandIds } from './main';
 
 export class DockerCommands {

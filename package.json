@@ -47,7 +47,7 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "cd client && npm run update-vscode && cd .. && npm run compile",
-		"compile": "tsc -b",
+		"compile": "tsc -p . && tsc -p tsconfig.client.json && tsc -p tsconfig.dockerfile-language-server-nodejs.json && tsc -p tsconfig.dockerfile-language-service.json && tsc -p tsconfig.dockerfile-utils.json",
 		"watch": "tsc -b -w",
 		"postinstall": "cd client && npm install && cd ../dockerfile-language-server-nodejs && npm install && cd ../dockerfile-language-service && npm install && cd ../dockerfile-utils && npm install && cd .."
 	},

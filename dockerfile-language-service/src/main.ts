@@ -5,7 +5,7 @@
 import {
     Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, Location, DocumentHighlight, SymbolInformation, SignatureHelp, TextEdit, DocumentLink, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange
 } from 'vscode-languageserver-types';
-import { ValidatorSettings } from 'dockerfile-utils';
+import { ValidatorSettings } from '../../dockerfile-utils/src/main';
 import { LanguageService } from './languageService';
 import { SemanticTokens } from 'vscode-languageserver-protocol/lib/protocol.sematicTokens.proposed';
 

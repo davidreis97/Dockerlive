@@ -9,8 +9,8 @@ import {
 	Position, Range,
 	TextDocumentSyncKind, MarkupKind, SymbolKind, InsertTextFormat, CompletionItemKind, CodeActionKind, DiagnosticSeverity, FoldingRangeKind, DocumentHighlightKind
 } from 'vscode-languageserver';
-import { CommandIds } from 'dockerfile-language-service';
-import { ValidationCode } from 'dockerfile-utils';
+import { CommandIds } from '../../dockerfile-language-service/src/main';
+import { ValidationCode } from '../../dockerfile-utils/src/main';
 
 // fork the server and connect to it using Node IPC
 let lspProcess = child_process.fork("out/src/server.js", [ "--node-ipc" ]);
