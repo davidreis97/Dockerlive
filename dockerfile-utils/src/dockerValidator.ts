@@ -10,6 +10,9 @@ import { ValidationCode, ValidationSeverity, ValidatorSettings } from './main';
 import Dockerode from 'dockerode';
 import uri2path = require('file-uri-to-path');
 import path = require('path');
+import tarstream from 'tar-stream';
+import tar from 'tar-fs';
+import { PassThrough } from 'stream';
 
 export const KEYWORDS = [
     "ADD",
@@ -327,16 +330,26 @@ export class Validator {
         }
 
         const dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1); //Substring removes initial '/'
-        const filename = path.basename(dockerfilePath);
+        //const filename = path.basename(dockerfilePath); 
         const directory = path.dirname(dockerfilePath);
+        const tmpFileName = "tmp.Dockerfile";
+        
+        // Works, but packing the entire directory can be very slow
+        // Also fails to take into account the .dockerignore
+        const tardir = tar.pack(directory);
 
-        if(problems.length == 0){ //If static anslysis does not detect any problems, attempt to build the image
-            this.docker.buildImage({
-                context: directory,
-                src: [filename]
-            }, { t: "testimage" }, (error, response) => { 
-                console.log(error);
-                console.log(response);
+        let extract = tarstream.extract();
+
+        if(problems.length == 0){ //If static analysis does not detect any problems, attempt to build the image
+            this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName}, (error, response) => { 
+                if(error)
+                    console.log("ERROR:" + error);
+                if(response)
+                    response.addListener("data",(data: Buffer) => {
+                        if(data){
+                            console.log(data.toString());
+                        }
+                    })
             });
         }
         
