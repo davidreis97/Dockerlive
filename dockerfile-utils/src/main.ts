@@ -187,10 +187,12 @@ export function format(content: string, options: FormattingOptions): TextEdit[] 
     return formatter.formatDocument(document, options);
 }
 
+const validator = new Validator();
+
 /**
  * Validates the Dockerfile that is contained in the given string.
  */
 export function validate(document: TextDocument, settings?: ValidatorSettings): Diagnostic[] {
-    const validator = new Validator(settings);
+    validator.setSettings(settings);
     return validator.validate(document);
 }

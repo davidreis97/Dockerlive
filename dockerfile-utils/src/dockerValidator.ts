@@ -10,9 +10,10 @@ import { ValidationCode, ValidationSeverity, ValidatorSettings } from './main';
 import Dockerode from 'dockerode';
 import uri2path = require('file-uri-to-path');
 import path = require('path');
+import fs from 'fs';
 import tarstream from 'tar-stream';
 import tar from 'tar-fs';
-import { PassThrough } from 'stream';
+import { PassThrough, Stream, Duplex } from 'stream';
 
 export const KEYWORDS = [
     "ADD",
@@ -53,12 +54,22 @@ export class Validator {
         instructionWorkdirRelative: ValidationSeverity.WARNING
     }
 
+    private dynAnalProblems: Diagnostic[];
+
+    private ongoingDockerBuild: Duplex;
+
     constructor(settings?: ValidatorSettings) {
         if (settings) {
             this.settings = settings;
         }
 
         this.docker = new Dockerode();
+
+        this.dynAnalProblems = [];
+    }
+
+    public setSettings(settings: ValidatorSettings) {
+        this.settings = settings;
     }
 
     private checkDirectives(dockerfile: Dockerfile, problems: Diagnostic[]) {
@@ -329,31 +340,44 @@ export class Validator {
             this.validateInstruction(document, escapeChar, instruction, instruction.getKeyword(), true, problems);
         }
 
-        const dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1); //Substring removes initial '/'
-        //const filename = path.basename(dockerfilePath); 
-        const directory = path.dirname(dockerfilePath);
-        const tmpFileName = "tmp.Dockerfile";
-        
-        // Works, but packing the entire directory can be very slow
-        // Also fails to take into account the .dockerignore
-        const tardir = tar.pack(directory);
+        if (problems.length == 0) { //If static analysis does not detect any problems, attempt to build the image
+            const dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1); //Substring removes initial '/'
+            //const filename = path.basename(dockerfilePath); 
+            const directory = path.dirname(dockerfilePath);
+            const tmpFileName = "tmp.Dockerfile";
 
-        let extract = tarstream.extract();
+            // Works, but packing the entire directory can be very slow
+            // Also fails to take into account the .dockerignore
+            const tardir = tar.pack(directory);
+            fs.writeFileSync(directory + "/" + tmpFileName, document.getText());
 
-        if(problems.length == 0){ //If static analysis does not detect any problems, attempt to build the image
-            this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName}, (error, response) => { 
-                if(error)
-                    console.log("ERROR:" + error);
-                if(response)
-                    response.addListener("data",(data: Buffer) => {
-                        if(data){
-                            console.log(data.toString());
-                        }
-                    })
+            this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error, stream) => {
+                if (error)
+                    return console.log("ERROR:" + error);
+
+                if(this.ongoingDockerBuild){ //Build didn't finish in time to be displayed to the developer - cancel and start again
+                    this.ongoingDockerBuild.destroy();
+                    this.dynAnalProblems = [];
+                }
+
+                this.ongoingDockerBuild = stream;
+
+                stream.on('end', () => {
+                    this.ongoingDockerBuild.destroy();
+                    this.ongoingDockerBuild = null;
+                    console.log('end'); 
+                });
+                stream.on('error', (error: Buffer) => {
+                    this.dynAnalProblems.push(Validator.createDiagnostic(DiagnosticSeverity.Error,instructions[0].getRange().start,instructions[0].getRange().end,"error"));
+                    console.log(error.toString());
+                });
+                stream.on('data', (data: Buffer) => {
+                    console.log(data.toString());
+                });
             });
         }
-        
-        return problems;
+
+        return problems.concat(this.dynAnalProblems);
     }
 
     private validateInstruction(document: TextDocument, escapeChar: string, instruction: Instruction, keyword: string, isTrigger: boolean, problems: Diagnostic[]): void {
@@ -1712,7 +1736,7 @@ export class Validator {
             message: description,
             severity: severity,
             code: code,
-            source: "dockerfile-utils"
+            source: "dockerfile-utils",
         };
     }
 }
