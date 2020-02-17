@@ -7,6 +7,7 @@ import * as assert from "assert";
 import { Diagnostic, DiagnosticSeverity, TextDocument } from 'vscode-languageserver-types';
 import { ValidationCode, ValidationSeverity } from '../../dockerfile-utils/src/main';
 import { DockerfileLanguageServiceFactory } from '../src/main';
+import { settings } from 'cluster';
 
 const service = DockerfileLanguageServiceFactory.createLanguageService();
 
@@ -25,20 +26,20 @@ describe("Docker Validation Tests", () => {
 
     it("settings ignore case ignore", () => {
         let document = TextDocument.create("","",0,"from node");
-        let problems = service.validate(document, { instructionCasing: ValidationSeverity.IGNORE });
+        let problems = service.validate(document, null, { instructionCasing: ValidationSeverity.IGNORE });
         assert.equal(0, problems.length);
     });
 
     it("settings ignore case warning", () => {
         let document = TextDocument.create("","",0,"from node");
-        let problems = service.validate(document, { instructionCasing: ValidationSeverity.WARNING });
+        let problems = service.validate(document, null, { instructionCasing: ValidationSeverity.WARNING });
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Warning);
     });
 
     it("settings ignore case error", () => {
         let document = TextDocument.create("","",0,"from node");
-        let problems = service.validate(document, { instructionCasing: ValidationSeverity.ERROR });
+        let problems = service.validate(document, null, { instructionCasing: ValidationSeverity.ERROR });
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Error);
     });

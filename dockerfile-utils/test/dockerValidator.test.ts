@@ -26,7 +26,7 @@ function validateDockerfile(content: string, settings?: ValidatorSettings) {
             instructionWorkdirRelative: ValidationSeverity.WARNING,
         };
     }
-    return validate(TextDocument.create("","",0,content), settings);
+    return validate(TextDocument.create("","",0,content), null, settings);
 }
 
 function convertValidationSeverity(severity: ValidationSeverity): DiagnosticSeverity {
@@ -1794,18 +1794,18 @@ describe("Docker Validator Tests", function() {
             });
 
             it("ignore", function() {
-                let diagnostics = validate(TextDocument.create("","",0,content), { instructionJSONInSingleQuotes: ValidationSeverity.IGNORE });
+                let diagnostics = validate(TextDocument.create("","",0,content), null, { instructionJSONInSingleQuotes: ValidationSeverity.IGNORE });
                 assert.equal(diagnostics.length, 0);
             });
 
             it("warning", function() {
-                let diagnostics = validate(TextDocument.create("","",0,content), { instructionJSONInSingleQuotes: ValidationSeverity.WARNING });
+                let diagnostics = validate(TextDocument.create("","",0,content), null, { instructionJSONInSingleQuotes: ValidationSeverity.WARNING });
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Warning, 1, instructionLength + 1, 1, instructionLength + 22);
             });
 
             it("error", function() {
-                let diagnostics = validate(TextDocument.create("","",0,content), { instructionJSONInSingleQuotes: ValidationSeverity.ERROR });
+                let diagnostics = validate(TextDocument.create("","",0,content), null, { instructionJSONInSingleQuotes: ValidationSeverity.ERROR });
                 assert.equal(diagnostics.length, 1);
                 assertInstructionJSONInSingleQuotes(diagnostics[0], DiagnosticSeverity.Error, 1, instructionLength + 1, 1, instructionLength + 22);
             });

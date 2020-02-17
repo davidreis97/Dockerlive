@@ -230,7 +230,7 @@ export class Validator {
         }
     }
 
-    validate(document: TextDocument): Diagnostic[] {
+    validate(document: TextDocument, sendDiagnostics?: Function): Diagnostic[] {
         this.document = document;
         let problems: Diagnostic[] = [];
         let dockerfile = DockerfileParser.parse(document.getText());
@@ -368,7 +368,8 @@ export class Validator {
                     console.log('end'); 
                 });
                 stream.on('error', (error: Buffer) => {
-                    this.dynAnalProblems.push(Validator.createDiagnostic(DiagnosticSeverity.Error,instructions[0].getRange().start,instructions[0].getRange().end,"error"));
+                    sendDiagnostics(Validator.createDiagnostic(DiagnosticSeverity.Error,instructions[0].getRange().start,instructions[0].getRange().end,"error"));
+                    //this.dynAnalProblems.push(Validator.createDiagnostic(DiagnosticSeverity.Error,instructions[0].getRange().start,instructions[0].getRange().end,"error"));
                     console.log(error.toString());
                 });
                 stream.on('data', (data: Buffer) => {
