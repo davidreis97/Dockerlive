@@ -341,7 +341,7 @@ export class Validator {
         }
 
         if (problems.length == 0) { //If static analysis does not detect any problems, attempt to build the image
-            const dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1); //Substring removes initial '/'
+            const dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1); //Fails on macOS (and linux probably)
             //const filename = path.basename(dockerfilePath); 
             const directory = path.dirname(dockerfilePath);
             const tmpFileName = "tmp.Dockerfile";
@@ -351,7 +351,7 @@ export class Validator {
             const tardir = tar.pack(directory);
             fs.writeFileSync(directory + "/" + tmpFileName, document.getText());
 
-            this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error, stream) => {
+            this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
                 if (error)
                     return console.log("ERROR:" + error);
 
