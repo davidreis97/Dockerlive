@@ -14,7 +14,7 @@ import {
 	RenameParams, Range, WorkspaceEdit, Location,
 	DidChangeTextDocumentParams, DidOpenTextDocumentParams, DidCloseTextDocumentParams, TextDocumentContentChangeEvent,
 	DidChangeConfigurationNotification, ConfigurationItem, DocumentLinkParams, DocumentLink, MarkupKind,
-	VersionedTextDocumentIdentifier, TextDocumentEdit, CodeAction, CodeActionKind, FoldingRangeRequestParam, ProposedFeatures
+	VersionedTextDocumentIdentifier, TextDocumentEdit, CodeAction, CodeActionKind, FoldingRangeRequestParam, ProposedFeatures, Diagnostic
 } from 'vscode-languageserver';
 import { ValidatorSettings, ValidationSeverity } from '../../dockerfile-utils/src/main';
 import { CommandIds, DockerfileLanguageServiceFactory } from '../../dockerfile-language-service/src/main';
@@ -309,13 +309,17 @@ function validateTextDocument(textDocument: TextDocument): void {
 	if (configurationSupport) {
 		getConfiguration(textDocument.uri).then((config: ValidatorConfiguration) => {
 			const fileSettings = convertValidatorConfiguration(config);
-			const diagnostics = service.validate(textDocument, connection.sendDiagnostics, fileSettings);
-			connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+			const diagnostics = service.validate(textDocument, sendDiagnostics, fileSettings);
+			sendDiagnostics(textDocument.uri, diagnostics);
 		});
 	} else {
-		const diagnostics = service.validate(textDocument, connection.sendDiagnostics, validatorSettings);
-		connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+		const diagnostics = service.validate(textDocument, sendDiagnostics, validatorSettings);
+		sendDiagnostics(textDocument.uri, diagnostics);
 	}
+}
+
+function sendDiagnostics(documentURI: string, diagnostics: Diagnostic[]){
+	connection.sendDiagnostics({uri: documentURI, diagnostics});
 }
 
 interface ValidatorConfiguration {
