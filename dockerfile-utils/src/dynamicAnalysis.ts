@@ -6,12 +6,12 @@ import { Validator } from './dockerValidator';
 import { ValidationCode } from './main';
 
 export class DynamicAnalysis{
-	public timestamp: number;
+	public version: number;
 	public diagnostics: Diagnostic[];
 	public stream: Duplex;
 
-	constructor(stream: Duplex){
-		this.timestamp = Date.now();
+	constructor(stream: Duplex, version: number){
+		this.version = version;
 		this.stream = stream;
 		this.diagnostics = [];
 	}
@@ -30,7 +30,6 @@ export class DynamicAnalysis{
 	}
 
 	log(msg: String){
-		if(msg != "\n")
-			console.log("[" + this.timestamp + "] - " + msg);
+		console.log("[" + this.version + "] - " + msg);
 	}
 }

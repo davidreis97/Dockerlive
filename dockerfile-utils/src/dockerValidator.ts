@@ -345,13 +345,13 @@ export class Validator {
                 dockerfilePath = decodeURIComponent(uri2path(document.uri));
             }
             const directory = path.dirname(dockerfilePath);
-            const tmpFileName = "tmp.Dockerfile"; //TODO - ADD TEMPORARY FILE TO VSCODE IGNORE
+            const tmpFileName = "tmp.Dockerfile"; //TODO - ADD TEMPORARY FILE TO VSCODE and GIT IGNORE (or simply move to a different directory)
 
             const tardir = tar.pack(directory);
             fs.writeFileSync(directory + "/" + tmpFileName, document.getText());
 
             this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
-                const analysis : DynamicAnalysis = new DynamicAnalysis(stream);
+                const analysis : DynamicAnalysis = new DynamicAnalysis(stream,document.version);
                 let currentStep : number = 1;
 
                 if (error){
@@ -361,7 +361,8 @@ export class Validator {
 
                 if(this.currentDynAnalysis == null){
                     this.currentDynAnalysis = analysis;
-                }else if(this.currentDynAnalysis.timestamp < analysis.timestamp){
+                }else if(this.currentDynAnalysis.version < analysis.version){
+                    this.currentDynAnalysis.log("Killed on purpose");
                     this.currentDynAnalysis.destroy();
                     this.currentDynAnalysis = analysis;
                 }else{
