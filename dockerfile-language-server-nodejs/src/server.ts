@@ -14,7 +14,7 @@ import {
 	RenameParams, Range, WorkspaceEdit, Location,
 	DidChangeTextDocumentParams, DidOpenTextDocumentParams, DidCloseTextDocumentParams, TextDocumentContentChangeEvent,
 	DidChangeConfigurationNotification, ConfigurationItem, DocumentLinkParams, DocumentLink, MarkupKind,
-	VersionedTextDocumentIdentifier, TextDocumentEdit, CodeAction, CodeActionKind, FoldingRangeRequestParam, ProposedFeatures, Diagnostic
+	VersionedTextDocumentIdentifier, TextDocumentEdit, CodeAction, CodeActionKind, FoldingRangeRequestParam, ProposedFeatures, Diagnostic, ProgressType
 } from 'vscode-languageserver';
 import { ValidatorSettings, ValidationSeverity } from '../../dockerfile-utils/src/main';
 import { CommandIds, DockerfileLanguageServiceFactory } from '../../dockerfile-language-service/src/main';
@@ -305,17 +305,74 @@ function convertValidatorConfiguration(config: ValidatorConfiguration): Validato
 	};
 }
 
+function initializeWorkDoneProgressReport(){
+	const randToken : string = "" + Math.round(Math.random() * 10000000);
+
+	connection.sendRequest('window/workDoneProgress/create',{
+		token: randToken
+	});
+
+	return randToken;
+}
+
 function validateTextDocument(textDocument: TextDocument): void {
+	const token : string = initializeWorkDoneProgressReport();
+	let hasBegun = false;
+
+	function _sendProgress(value: string | boolean){
+		if(value === true){
+			endProgress(token);
+			return;
+		}else if(value === false){
+			endProgress(token, "ERROR!");
+			return;
+		}
+
+		if(!hasBegun){
+			startProgress(value, token);
+			hasBegun = true;
+		}else{
+			sendProgress(value, token);
+		}
+	}
+
 	if (configurationSupport) {
 		getConfiguration(textDocument.uri).then((config: ValidatorConfiguration) => {
 			const fileSettings = convertValidatorConfiguration(config);
-			const diagnostics = service.validate(textDocument, sendDiagnostics, fileSettings);
+			const diagnostics = service.validate(textDocument, sendDiagnostics, _sendProgress, fileSettings);
 			sendDiagnostics(textDocument.uri, diagnostics);
 		});
 	} else {
-		const diagnostics = service.validate(textDocument, sendDiagnostics, validatorSettings);
+		const diagnostics = service.validate(textDocument, sendDiagnostics, _sendProgress, validatorSettings);
 		sendDiagnostics(textDocument.uri, diagnostics);
 	}
+}
+
+function startProgress(value: string, token: string){
+	connection.sendProgress(new ProgressType,token,{
+		"kind": "begin",
+		"title": "Building",
+		"cancellable": false,
+		"message": value,
+		// "percentage": 0
+	});
+}
+
+function sendProgress(value: string, token: string){
+	connection.sendProgress(new ProgressType,token,{
+		"kind": "report",
+		"title": "Building",
+		"cancellable": false,
+		"message": value,
+		// "percentage": 0
+	});
+}
+
+function endProgress(token: string, message?: string){
+	connection.sendProgress(new ProgressType,token,{
+		"kind": "end",
+		"message": message
+	});
 }
 
 function sendDiagnostics(documentURI: string, diagnostics: Diagnostic[]){

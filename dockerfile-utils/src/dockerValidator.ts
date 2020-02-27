@@ -227,7 +227,7 @@ export class Validator {
         }
     }
 
-    validate(document: TextDocument, sendDiagnostics?: Function): Diagnostic[] {
+    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function): Diagnostic[] {
         this.document = document;
         let problems: Diagnostic[] = [];
         let dockerfile = DockerfileParser.parse(document.getText());
@@ -371,6 +371,7 @@ export class Validator {
 
                 stream.on('end', () => {
                     analysis.log("End of Stream");
+                    sendProgress(true);
                 });
                 stream.on('error', (error: Buffer) => {
                     analysis.log(error.toString());
@@ -395,7 +396,7 @@ export class Validator {
                                         currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
                                         const totalSteps : number = parseInt(tokenizedData[1].match(/\d+/)[0]);
 
-                                        //SEND PROGRESS
+                                        sendProgress("Step: " + currentStep + " / " + totalSteps);
                                     }catch(e){
                                         console.error("Something went wrong parsing Docker build steps...");
                                     }
