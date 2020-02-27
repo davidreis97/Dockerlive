@@ -395,8 +395,8 @@ export class Validator {
 
                                         currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
                                         const totalSteps : number = parseInt(tokenizedData[1].match(/\d+/)[0]);
-
-                                        sendProgress("Step: " + currentStep + " / " + totalSteps);
+                                        
+                                        sendProgress(parsedData["stream"]);
                                     }catch(e){
                                         console.error("Something went wrong parsing Docker build steps...");
                                     }
