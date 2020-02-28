@@ -15,6 +15,7 @@ import fs from 'fs';
 import tarstream from 'tar-stream';
 import tar from 'tar-fs';
 import { PassThrough, Stream, Duplex } from 'stream';
+import { exec, ExecException } from 'child_process';
 
 export const KEYWORDS = [
     "ADD",
@@ -387,6 +388,18 @@ export class Validator {
                                 if(parsedData["stream"].match("Successfully built")){
                                     analysis.diagnostics = [];
                                     sendDiagnostics(document.uri, analysis.diagnostics.concat(problems));
+
+                                    /*const container =*/ exec("docker run --name testcontainer testimage",(error: ExecException, stdout: string, stderr: string) => {
+                                        analysis.log("[CONTAINER] " + stderr)
+                                        analysis.log("[CONTAINER] " + stdout);
+
+                                        /*const inspec =*/ exec("inspec exec Dockerfile-test.rb -t docker://inspectest",(error: ExecException, stdout: string, stderr: string) => {
+                                            analysis.log("[INSPEC] " + stderr);                                            
+                                            analysis.log("[INSPEC] " + stdout);
+
+                                            exec("docker rm testcontainer");
+                                        });
+                                    });
                                 }
 
                                 if(parsedData["stream"].match(/Step \d+\/\d+ :/)){
@@ -394,7 +407,7 @@ export class Validator {
                                         const tokenizedData :string[] = parsedData["stream"].split("/");
 
                                         currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
-                                        const totalSteps : number = parseInt(tokenizedData[1].match(/\d+/)[0]);
+                                        //const totalSteps = parseInt(tokenizedData[1].match(/\d+/)[0]);
                                         
                                         sendProgress(parsedData["stream"]);
                                     }catch(e){
