@@ -30,6 +30,6 @@ export class DynamicAnalysis{
 	}
 
 	log(msg: String){
-		console.log("[" + this.version + "] - " + msg);
+		console.log("[" + this.version + "] " + msg);
 	}
 }
