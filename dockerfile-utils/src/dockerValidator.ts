@@ -12,10 +12,10 @@ import Dockerode from 'dockerode';
 import uri2path = require('file-uri-to-path');
 import path = require('path');
 import fs from 'fs';
-import tarstream from 'tar-stream';
 import tar from 'tar-fs';
-import { PassThrough, Stream, Duplex } from 'stream';
-import { exec, ExecException } from 'child_process';
+import { Stream, Duplex } from 'stream';
+
+export const DEBUG = false;
 
 export const KEYWORDS = [
     "ADD",
@@ -64,6 +64,16 @@ export class Validator {
         }
 
         this.docker = new Dockerode();
+        this.docker.listContainers({all: true}, (err, containers) => {
+            containers.forEach((containerInfo) => {
+                if (containerInfo.Names[0].match(/\/testcontainer.*/)){
+                    console.log("REMOVING CONTAINER - " + containerInfo.Names[0]);
+                    this.docker.getContainer(containerInfo.Id).remove({v: true, force: true});
+                }else{
+                    console.log("KEEPING CONTAINER - " + containerInfo.Names[0]);
+                }
+            });
+        });
     }
 
     public setSettings(settings: ValidatorSettings) {
@@ -371,33 +381,51 @@ export class Validator {
                 }
 
                 stream.on('end', () => {
-                    analysis.log("End of Stream");
+                    if(DEBUG)
+                        analysis.log("End of Stream");
                     sendProgress(true);
                 });
                 stream.on('error', (error: Buffer) => {
-                    analysis.log(error.toString());
+                    analysis.log("Error", error.toString());
                 });
                 stream.on('data', (dataBuffer: Buffer) => {
+                    if(this.currentDynAnalysis != analysis){
+                        analysis.destroy();
+                    }
+
                     const dataArray = dataBuffer.toString().split('\n');
                     for(let data of dataArray){                    
                         try{
                             const parsedData = JSON.parse(json_escape(data.toString()));
                             if(parsedData["stream"]){
-                                analysis.log("Stream: " + parsedData["stream"]);
+                                analysis.log("Stream", parsedData["stream"]);
 
                                 if(parsedData["stream"].match("Successfully built")){
                                     analysis.diagnostics = [];
                                     sendDiagnostics(document.uri, analysis.diagnostics.concat(problems));
 
-                                    /*const container =*/ exec("docker run --name testcontainer testimage",(error: ExecException, stdout: string, stderr: string) => {
-                                        analysis.log("[CONTAINER] " + stderr)
-                                        analysis.log("[CONTAINER] " + stdout);
+                                    this.docker.createContainer({Image: 'testimage', Tty: true, name: 'testcontainer'+analysis.version}, function (err, container) {
+                                        analysis.container = container;
 
-                                        /*const inspec =*/ exec("inspec exec Dockerfile-test.rb -t docker://inspectest",(error: ExecException, stdout: string, stderr: string) => {
-                                            analysis.log("[INSPEC] " + stderr);                                            
-                                            analysis.log("[INSPEC] " + stdout);
+                                        if(err){
+                                            analysis.log("ERROR CREATING CONTAINER", err);
+                                        }
 
-                                            exec("docker rm testcontainer");
+                                        container.start(function (err, data) {
+                                            if(err){
+                                                analysis.log("ERROR STARTING CONTAINER", err);
+                                            }
+                                            analysis.log("STARTED CONTAINER", data);
+                                        });
+
+                                        container.attach({stream: true, stdout: true, stderr: true}, function (err, stream: Stream) {
+                                            if(err){
+                                                analysis.log("ERROR ATTACHING TO CONTAINER", err);
+                                            }
+                                            stream.on('data', (data) => {
+                                                analysis.log("CONTAINER", data);
+                                            })
+                                            //stream.pipe(process.stdout);
                                         });
                                     });
                                 }
@@ -411,17 +439,18 @@ export class Validator {
                                         
                                         sendProgress(parsedData["stream"]);
                                     }catch(e){
-                                        console.error("Something went wrong parsing Docker build steps...");
+                                        analysis.log("Something went wrong parsing Docker build steps...");
                                     }
                                 }
                             }else if(parsedData["status"]){
-                                analysis.log("Status: " + parsedData["status"]);
+                                analysis.log("Status", parsedData["status"]);
                             }else if(parsedData["errorDetail"]){
                                 analysis.addDiagnostic(DiagnosticSeverity.Error,instructions[currentStep-1].getRange(),parsedData["errorDetail"]["message"]);
                                 sendDiagnostics(document.uri, analysis.diagnostics.concat(problems));
-                                analysis.log("ErrorDetail: " + parsedData["errorDetail"]["message"]);
+                                analysis.log("ErrorDetail", parsedData["errorDetail"]["message"]);
                             }else{
-                                analysis.log("Other: " + data.toString());
+                                if(DEBUG)
+                                    analysis.log("Other", data.toString());
                             }
                         }catch(e){}
                     }

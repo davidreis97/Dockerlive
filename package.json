@@ -55,5 +55,8 @@
 		"@types/node": "^12.11.7",
 		"concurrently": "^5.1.0",
 		"typescript": "^3.6.4"
+	},
+	"dependencies": {
+		"strip-ansi": "^6.0.0"
 	}
 }
