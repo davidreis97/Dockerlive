@@ -15,7 +15,7 @@ import fs from 'fs';
 import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 
-export const DEBUG = true;
+export const DEBUG = false;
 
 export const KEYWORDS = [
     "ADD",
@@ -64,14 +64,14 @@ export class Validator {
         }
 
         this.docker = new Dockerode();
-        this.docker.listContainers({all: true}, (err, containers) => {
+        this.docker.listContainers({ all: true }, (err, containers) => {
             containers.forEach((containerInfo) => {
-                if (containerInfo.Names[0].match(/\/testcontainer.*/)){
-                    if(DEBUG)
+                if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
+                    if (DEBUG)
                         console.log("REMOVING CONTAINER - " + containerInfo.Names[0]);
-                    this.docker.getContainer(containerInfo.Id).remove({v: true, force: true});
-                }else{
-                    if(DEBUG)
+                    this.docker.getContainer(containerInfo.Id).remove({ v: true, force: true });
+                } else {
+                    if (DEBUG)
                         console.log("KEEPING CONTAINER - " + containerInfo.Names[0]);
                 }
             });
@@ -351,116 +351,169 @@ export class Validator {
         }
 
         if (problems.length == 0) { //Should instead check if static analysis found errors, since warnings shouldn't stop dynamic analysis
-            let dockerfilePath: string;
-            if(process.platform === "win32"){
-                dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1);
-            }else {
-                dockerfilePath = decodeURIComponent(uri2path(document.uri));
+            let entrypoint: Instruction = instructions[instructions.length - 1];
+            if (entrypoints[0] != null) {
+                entrypoint = entrypoints[0];
             }
-            const directory = path.dirname(dockerfilePath);
-            const tmpFileName = "tmp.Dockerfile"; //TODO - ADD TEMPORARY FILE TO VSCODE and GIT IGNORE (or simply move to a different directory)
 
-            const tardir = tar.pack(directory);
-            fs.writeFileSync(directory + "/" + tmpFileName, document.getText());
-
-            this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
-                const analysis : DynamicAnalysis = new DynamicAnalysis(stream,document.version);
-                let currentStep : number = 1;
-
-                if (error){
-                    console.log(analysis.log(error));
-                    return;
-                }
-
-                if(this.currentDynAnalysis == null){
-                    this.currentDynAnalysis = analysis;
-                }else if(this.currentDynAnalysis.version < analysis.version){
-                    this.currentDynAnalysis.log("Killed on purpose");
-                    this.currentDynAnalysis.destroy();
-                    this.currentDynAnalysis = analysis;
-                }else{
-                    analysis.destroy();
-                }
-
-                stream.on('end', () => {
-                    if(DEBUG)
-                        analysis.log("End of Stream");
-                    sendProgress(true);
-                });
-                stream.on('error', (error: Buffer) => {
-                    analysis.log("Error", error.toString());
-                });
-                stream.on('data', (dataBuffer: Buffer) => {
-                    if(this.currentDynAnalysis != analysis){
-                        analysis.destroy();
-                    }
-
-                    const dataArray = dataBuffer.toString().split('\n');
-                    for(let data of dataArray){                    
-                        try{
-                            const parsedData = JSON.parse(json_escape(data.toString()));
-                            if(parsedData["stream"]){
-                                analysis.log("Stream", parsedData["stream"]);
-
-                                if(parsedData["stream"].match("Successfully built")){
-                                    analysis.diagnostics = [];
-                                    sendDiagnostics(document.uri, analysis.diagnostics.concat(problems));
-
-                                    this.docker.createContainer({Image: 'testimage', Tty: true, name: 'testcontainer'+analysis.version}, function (err, container) {
-                                        analysis.container = container;
-
-                                        if(err){
-                                            analysis.log("ERROR CREATING CONTAINER", err);
-                                        }
-
-                                        container.start(function (err, data) {
-                                            if(err){
-                                                analysis.log("ERROR STARTING CONTAINER", err);
-                                            }
-                                            analysis.log("STARTED CONTAINER", data);
-                                        });
-
-                                        container.attach({stream: true, stdout: true, stderr: true}, function (err, stream: Stream) {
-                                            if(err){
-                                                analysis.log("ERROR ATTACHING TO CONTAINER", err);
-                                            }
-                                            stream.on('data', (data) => {
-                                                analysis.log("CONTAINER STDOUT", data);
-                                            })
-                                        });
-                                        
-                                    });
-                                }
-
-                                if(parsedData["stream"].match(/Step \d+\/\d+ :/)){
-                                    try{
-                                        const tokenizedData :string[] = parsedData["stream"].split("/");
-
-                                        currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
-                                        //const totalSteps = parseInt(tokenizedData[1].match(/\d+/)[0]);
-                                        
-                                        sendProgress(parsedData["stream"]);
-                                    }catch(e){
-                                        analysis.log("Something went wrong parsing Docker build steps...");
-                                    }
-                                }
-                            }else if(parsedData["status"]){
-                                analysis.log("Status", parsedData["status"]);
-                            }else if(parsedData["errorDetail"]){
-                                analysis.addDiagnostic(DiagnosticSeverity.Error,instructions[currentStep-1].getRange(),parsedData["errorDetail"]["message"]);
-                                sendDiagnostics(document.uri, analysis.diagnostics.concat(problems));
-                                analysis.log("ErrorDetail", parsedData["errorDetail"]["message"]);
-                            }else{
-                                if(DEBUG)
-                                    analysis.log("Other", data.toString());
-                            }
-                        }catch(e){}
-                    }
-                });
-            });
+            this.dynamicAnalysis(document, sendDiagnostics, sendProgress, problems, instructions, entrypoint);
         }
 
         return problems;
+    }
+
+    private runContainer(analysis: DynamicAnalysis, entrypoint: Instruction, sendDiagnostics: Function, document: TextDocument, SA_problems: Diagnostic[]){
+        
+        const isLatest = () : boolean => {
+            return analysis == this.currentDynAnalysis;
+        };
+
+        this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + analysis.version }, (err, container) => {
+            analysis.container = container;
+
+            if(!isLatest()){
+                return;
+            }
+
+            if (err) {
+                analysis.log("ERROR CREATING CONTAINER", err);
+                analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Error creating container - " + err);
+                sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
+            }
+
+            container.start((err, data) => {
+                if(!isLatest()){
+                    return;
+                }
+                if (err) {
+                    analysis.log("ERROR STARTING CONTAINER", err);
+                    analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Error starting container - " + err);
+                    sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
+                }
+                analysis.log("STARTED CONTAINER", data);
+            });
+
+            container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) =>  {
+                if(!isLatest()){
+                    return;
+                }
+                if (err) {
+                    analysis.log("ERROR ATTACHING TO CONTAINER", err);
+                    analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Error attaching to container - " + err);
+                    sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
+                }
+                stream.on('data', (data) => {
+                    analysis.log("CONTAINER STDOUT", data);
+                });
+                stream.on('end', (_) => {
+                    container.wait((err, data) => {
+                        if(!isLatest()){
+                            return;
+                        }
+                        if (err) {
+                            analysis.log("ERROR GETTING CONTAINER EXIT CODE", err);
+                        }
+                        analysis.log("CONTAINER CLOSED WITH CODE " + data.StatusCode);
+                        if (data.StatusCode != 0) {
+                            analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
+                            sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
+                        }
+                    });
+                });
+            });
+        });
+    }
+
+    private dynamicAnalysis(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, SA_problems: Diagnostic[], instructions: Instruction[], entrypoint: Instruction) {
+        let dockerfilePath: string;
+        if (process.platform === "win32") {
+            dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1);
+        } else {
+            dockerfilePath = decodeURIComponent(uri2path(document.uri));
+        }
+        const directory = path.dirname(dockerfilePath);
+        const tmpFileName = "tmp.Dockerfile"; //TODO - ADD TEMPORARY FILE TO VSCODE and GIT IGNORE (or simply move to a different directory)
+
+        const tardir = tar.pack(directory);
+        fs.writeFileSync(directory + "/" + tmpFileName, document.getText());
+
+        this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
+            const analysis: DynamicAnalysis = new DynamicAnalysis(stream, document.version);
+            let currentStep: number = 1;
+
+            if (error) {
+                console.log(analysis.log(error));
+                return;
+            }
+
+            if (this.currentDynAnalysis == null) {
+                this.currentDynAnalysis = analysis;
+            } else if (this.currentDynAnalysis.version < analysis.version) {
+                this.currentDynAnalysis.log("Killed on purpose");
+                this.currentDynAnalysis.destroy();
+                this.currentDynAnalysis = analysis;
+            } else {
+                analysis.destroy();
+            }
+
+            stream.on('end', () => {
+                if (DEBUG)
+                    analysis.log("End of Stream");
+                sendProgress(true);
+            });
+            stream.on('error', (error: Buffer) => {
+                analysis.log("Error", error.toString());
+            });
+            stream.on('data', (dataBuffer: Buffer) => {
+                if (this.currentDynAnalysis != analysis) {
+                    analysis.destroy();
+                }
+
+                const dataArray = dataBuffer.toString().split('\n');
+                for (let data of dataArray) {
+                    try {
+                        const parsedData = JSON.parse(json_escape(data.toString()));
+                        if (parsedData["stream"]) {
+                            analysis.log("Stream", parsedData["stream"]);
+
+                            if (parsedData["stream"].match(/Step \d+\/\d+ :/)) {
+                                try {
+                                    const tokenizedData: string[] = parsedData["stream"].split("/");
+
+                                    currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
+                                    //const totalSteps = parseInt(tokenizedData[1].match(/\d+/)[0]);
+
+                                    sendProgress(parsedData["stream"]);
+                                } catch (e) {
+                                    analysis.log("Something went wrong parsing Docker build steps...");
+                                }
+                            }
+
+                            if (parsedData["stream"].match("Successfully built")) {
+                                analysis.diagnostics = [];
+                                sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
+
+                                this.runContainer(analysis, entrypoint, sendDiagnostics, document, SA_problems);
+                            }
+                        } else if (parsedData["status"]) {
+                            analysis.log("Status", parsedData["status"]);
+                        } else if (parsedData["errorDetail"]) {
+                            analysis.addDiagnostic(DiagnosticSeverity.Error, instructions[currentStep - 1].getRange(), parsedData["errorDetail"]["message"]);
+                            sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
+                            analysis.log("ErrorDetail", parsedData["errorDetail"]["message"]);
+                        } else {
+                            if (DEBUG){
+                                analysis.log("Other", data.toString());
+                            }
+                        }
+                    } catch (e) {
+                        if (DEBUG && data.toString()){
+                            analysis.log("Skipped build message",data.toString(),"Due to",e);
+                        }
+                    }
+                }
+            });
+        });
     }
 
     private validateInstruction(document: TextDocument, escapeChar: string, instruction: Instruction, keyword: string, isTrigger: boolean, problems: Diagnostic[]): void {
@@ -1837,6 +1890,6 @@ export class Validator {
     }
 }
 
-function json_escape(str: string){
-    return str.replace("\\n","").replace("\n","");
+function json_escape(str: string) {
+    return str.replace("\\n", "").replace("\n", "");
 }
