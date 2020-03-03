@@ -15,7 +15,7 @@ import fs from 'fs';
 import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 
-export const DEBUG = false;
+export const DEBUG = true;
 
 export const KEYWORDS = [
     "ADD",
@@ -67,10 +67,12 @@ export class Validator {
         this.docker.listContainers({all: true}, (err, containers) => {
             containers.forEach((containerInfo) => {
                 if (containerInfo.Names[0].match(/\/testcontainer.*/)){
-                    console.log("REMOVING CONTAINER - " + containerInfo.Names[0]);
+                    if(DEBUG)
+                        console.log("REMOVING CONTAINER - " + containerInfo.Names[0]);
                     this.docker.getContainer(containerInfo.Id).remove({v: true, force: true});
                 }else{
-                    console.log("KEEPING CONTAINER - " + containerInfo.Names[0]);
+                    if(DEBUG)
+                        console.log("KEEPING CONTAINER - " + containerInfo.Names[0]);
                 }
             });
         });
@@ -423,10 +425,10 @@ export class Validator {
                                                 analysis.log("ERROR ATTACHING TO CONTAINER", err);
                                             }
                                             stream.on('data', (data) => {
-                                                analysis.log("CONTAINER", data);
+                                                analysis.log("CONTAINER STDOUT", data);
                                             })
-                                            //stream.pipe(process.stdout);
                                         });
+                                        
                                     });
                                 }
 
