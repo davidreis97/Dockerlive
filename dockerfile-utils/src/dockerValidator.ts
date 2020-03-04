@@ -15,7 +15,7 @@ import fs from 'fs';
 import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 
-export const DEBUG = false;
+export const DEBUG = true;
 
 export const KEYWORDS = [
     "ADD",
@@ -362,13 +362,43 @@ export class Validator {
         return problems;
     }
 
-    private runContainer(analysis: DynamicAnalysis, entrypoint: Instruction, sendDiagnostics: Function, document: TextDocument, SA_problems: Diagnostic[]){
-        
+    private runNmap(instructions : Instruction[], container : any, analysis: DynamicAnalysis){
+        const rangesInFile : Range[] = [];
+        const ports: number[] = [];
+        const protocols: string[] = [];
+        const mappedPorts: number[] = [];
+
+        for(let instruction of instructions){
+            if (instruction.getInstruction() == Keyword.EXPOSE){
+                instruction.getArguments().map((arg) => {
+                    const splitPortProtocol = arg.getValue().split("/");
+                    rangesInFile.push(arg.getRange());
+                    ports.push(parseInt(splitPortProtocol[0]));
+                    protocols.push(splitPortProtocol.length > 1 ? splitPortProtocol[1] : "tcp"); //Default protocol is tcp
+                });
+            }
+        }
+
+        container.inspect(function (err, data) {
+            if (err) {
+                analysis.log("ERROR INSPECTING CONTAINER", err);
+            }
+            const mappings = data.Config.ExposedPorts;
+            console.log(mappings);
+            for(let i = 0; i < rangesInFile.length; i++){
+                
+            }
+            //console.log(data);
+            analysis.log("CONTAINER INFO", data);
+        });
+    }
+
+    private runContainer(analysis: DynamicAnalysis, entrypoint: Instruction, sendDiagnostics: Function, document: TextDocument, SA_problems: Diagnostic[], instructions: Instruction[]){
         const isLatest = () : boolean => {
             return analysis == this.currentDynAnalysis;
         };
 
-        this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + analysis.version }, (err, container) => {
+        this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + analysis.version, PublishAllPorts : true }, (err, container) => {
             analysis.container = container;
 
             if(!isLatest()){
@@ -391,6 +421,8 @@ export class Validator {
                     sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
                 }
                 analysis.log("STARTED CONTAINER", data);
+
+                this.runNmap(instructions,container,analysis);
             });
 
             container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) =>  {
@@ -493,7 +525,7 @@ export class Validator {
                                 analysis.diagnostics = [];
                                 sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
 
-                                this.runContainer(analysis, entrypoint, sendDiagnostics, document, SA_problems);
+                                this.runContainer(analysis, entrypoint, sendDiagnostics, document, SA_problems, instructions);
                             }
                         } else if (parsedData["status"]) {
                             analysis.log("Status", parsedData["status"]);
