@@ -14,6 +14,8 @@ import path = require('path');
 import fs from 'fs';
 import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
+import child_process from 'child_process';
+import xml2js from 'xml2js';
 
 export const DEBUG = true;
 
@@ -64,7 +66,7 @@ export class Validator {
         }
 
         this.docker = new Dockerode();
-        this.docker.listContainers({ all: true }, (err, containers) => {
+        this.docker.listContainers({ all: true }, (_err, containers) => {
             containers.forEach((containerInfo) => {
                 if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
                     if (DEBUG)
@@ -362,46 +364,87 @@ export class Validator {
         return problems;
     }
 
-    private runNmap(instructions : Instruction[], container : any, analysis: DynamicAnalysis){
-        const rangesInFile : Range[] = [];
+    private runNmap(instructions: Instruction[], container: any, analysis: DynamicAnalysis) {
+        const rangesInFile: Range[] = [];
         const ports: number[] = [];
         const protocols: string[] = [];
         const mappedPorts: number[] = [];
+        let diagnosticMessages: string[];
 
-        for(let instruction of instructions){
-            if (instruction.getInstruction() == Keyword.EXPOSE){
+        for (let instruction of instructions) {
+            if (instruction.getInstruction() == Keyword.EXPOSE) {
                 instruction.getArguments().map((arg) => {
                     const splitPortProtocol = arg.getValue().split("/");
                     rangesInFile.push(arg.getRange());
                     ports.push(parseInt(splitPortProtocol[0]));
-                    protocols.push(splitPortProtocol.length > 1 ? splitPortProtocol[1] : "tcp"); //Default protocol is tcp
+                    protocols.push(splitPortProtocol[1] ? splitPortProtocol[1] : "tcp"); //Default protocol is tcp
                 });
             }
         }
 
+        diagnosticMessages = Array(ports.length);
+
         container.inspect(function (err, data) {
             if (err) {
                 analysis.log("ERROR INSPECTING CONTAINER", err);
+                return;
             }
-            const mappings = data.Config.ExposedPorts;
-            console.log(mappings);
-            for(let i = 0; i < rangesInFile.length; i++){
-                
+            const mappings = data.NetworkSettings.Ports;
+            for (let i = 0; i < rangesInFile.length; i++) {
+                mappedPorts.push(parseInt(mappings[ports[i] + "/" + protocols[i]][0].HostPort));
             }
-            //console.log(data);
-            analysis.log("CONTAINER INFO", data);
+
+            //!SANITIZE
+            child_process.exec(`nmap -oX - 127.0.0.1 -p ${mappedPorts.join(",")} -sV`, (err: child_process.ExecException, stdout: string, _stderr: string) => {
+                if(err){
+                    analysis.log("ERROR EXECUTING NMAP",err.message);
+                    return;
+                }
+                xml2js.parseString(stdout,(err: Error,result) => {
+                    if(err){
+                        analysis.log("ERROR PARSING NMAP OUTPUT XML", err.message);
+                        return;
+                    }
+                    try{
+                        const nmapPorts : Array<any> = result['nmaprun']['host']['0']['ports']['0']['port'];
+                        for(const nmapPort of nmapPorts){
+                            const portID = parseInt(nmapPort['$']['portid']);
+                            const protocol = nmapPort['$']['protocol'];
+                            const serviceName = nmapPort['service'][0]['$']['name'];
+                            const serviceProduct = nmapPort['service'][0]['$']['product'];
+                            const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
+
+                            const index = mappedPorts.findIndex((value,_index,_obj)=>{value == portID}); //!NOT WORKING AS INTENDED
+                            diagnosticMessages[index] = protocol;
+                            if(serviceName){
+                                diagnosticMessages[index] += "/" + serviceName;
+                            }
+                            if(serviceProduct){
+                                diagnosticMessages[index] += " - " + serviceProduct;
+                            }
+                            if(serviceExtrainfo){
+                                diagnosticMessages[index] += " (" + serviceExtrainfo + ")";
+                            }
+                        }
+
+                        console.log(diagnosticMessages);
+                    }catch(e){
+                        analysis.log("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
+                    }
+                });
+            })
         });
     }
 
-    private runContainer(analysis: DynamicAnalysis, entrypoint: Instruction, sendDiagnostics: Function, document: TextDocument, SA_problems: Diagnostic[], instructions: Instruction[]){
-        const isLatest = () : boolean => {
+    private runContainer(analysis: DynamicAnalysis, entrypoint: Instruction, sendDiagnostics: Function, document: TextDocument, SA_problems: Diagnostic[], instructions: Instruction[]) {
+        const isLatest = (): boolean => {
             return analysis == this.currentDynAnalysis;
         };
 
-        this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + analysis.version, PublishAllPorts : true }, (err, container) => {
+        this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + analysis.version, HostConfig: { PublishAllPorts: true } }, (err, container) => {
             analysis.container = container;
 
-            if(!isLatest()){
+            if (!isLatest()) {
                 return;
             }
 
@@ -412,7 +455,7 @@ export class Validator {
             }
 
             container.start((err, data) => {
-                if(!isLatest()){
+                if (!isLatest()) {
                     return;
                 }
                 if (err) {
@@ -422,11 +465,11 @@ export class Validator {
                 }
                 analysis.log("STARTED CONTAINER", data);
 
-                this.runNmap(instructions,container,analysis);
+                this.runNmap(instructions, container, analysis);
             });
 
-            container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) =>  {
-                if(!isLatest()){
+            container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
+                if (!isLatest()) {
                     return;
                 }
                 if (err) {
@@ -439,7 +482,7 @@ export class Validator {
                 });
                 stream.on('end', (_) => {
                     container.wait((err, data) => {
-                        if(!isLatest()){
+                        if (!isLatest()) {
                             return;
                         }
                         if (err) {
@@ -534,13 +577,13 @@ export class Validator {
                             sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
                             analysis.log("ErrorDetail", parsedData["errorDetail"]["message"]);
                         } else {
-                            if (DEBUG){
+                            if (DEBUG) {
                                 analysis.log("Other", data.toString());
                             }
                         }
                     } catch (e) {
-                        if (DEBUG && data.toString()){
-                            analysis.log("Skipped build message",data.toString(),"Due to",e);
+                        if (DEBUG && data.toString()) {
+                            analysis.log("Skipped build message", data.toString(), "Due to", e);
                         }
                     }
                 }
