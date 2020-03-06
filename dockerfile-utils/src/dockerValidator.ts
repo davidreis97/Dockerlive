@@ -9,15 +9,6 @@ import { Dockerfile, Flag, Instruction, JSONInstruction, Add, Arg, Cmd, Copy, En
 import { ValidationCode, ValidationSeverity, ValidatorSettings } from './main';
 import { DynamicAnalysis } from './dynamicAnalysis';
 import Dockerode from 'dockerode';
-import uri2path = require('file-uri-to-path');
-import path = require('path');
-import fs from 'fs';
-import tar from 'tar-fs';
-import { Stream, Duplex } from 'stream';
-import child_process from 'child_process';
-import xml2js from 'xml2js';
-
-export const DEBUG = false;
 
 export const KEYWORDS = [
     "ADD",
@@ -42,7 +33,7 @@ export const KEYWORDS = [
 
 export class Validator {
 
-    private docker: Dockerode;
+    private docker: Promise<Dockerode>;
 
     private document: TextDocument;
 
@@ -58,26 +49,27 @@ export class Validator {
         instructionWorkdirRelative: ValidationSeverity.WARNING
     }
 
-    private currentDynAnalysis: DynamicAnalysis;
+    private dynamicAnalysis: DynamicAnalysis;
 
     constructor(settings?: ValidatorSettings) {
         if (settings) {
             this.settings = settings;
         }
 
-        this.docker = new Dockerode();
-        this.docker.listContainers({ all: true }, (_err, containers) => {
-            containers.forEach((containerInfo) => {
-                if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
-                    if (DEBUG)
-                        console.log("REMOVING CONTAINER - " + containerInfo.Names[0]);
-                    this.docker.getContainer(containerInfo.Id).remove({ v: true, force: true });
-                } else {
-                    if (DEBUG)
-                        console.log("KEEPING CONTAINER - " + containerInfo.Names[0]);
+        this.docker = new Promise(async (res,rej) => {
+            const docker : Dockerode = new Dockerode();
+            docker.listContainers({ all: true }, async (_err, containers) => {
+                for(let containerInfo of containers){
+                    if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
+                        console.log("REMOVING TEST CONTAINER - " + containerInfo.Names[0]);
+                        await docker.getContainer(containerInfo.Id).remove({ v: true, force: true });
+                    }
                 }
+    
+                console.log("DOCKER INITIALIZED");
+                res(docker);
             });
-        });
+        })
     }
 
     public setSettings(settings: ValidatorSettings) {
@@ -358,257 +350,20 @@ export class Validator {
                 entrypoint = entrypoints[0];
             }
 
-            this.dynamicAnalysis(document, sendDiagnostics, sendProgress, problems, instructions, entrypoint);
+            this.docker.then((docker_instance: Dockerode) => {
+                if(this.dynamicAnalysis && this.dynamicAnalysis.document.version > document.version){
+                    return [];
+                }else{
+                    if(this.dynamicAnalysis){
+                        this.dynamicAnalysis.destroy();
+                    }
+                    this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, problems, instructions, entrypoint, docker_instance);
+                }
+            });
+            
         }
 
         return problems;
-    }
-
-    private runNmap(instructions: Instruction[], container: any, analysis: DynamicAnalysis, sendDiagnostics: Function, SA_problems: Diagnostic[], document: TextDocument) {
-        const rangesInFile: Range[] = [];
-        const ports: number[] = [];
-        const protocols: string[] = [];
-        const mappedPorts: number[] = [];
-
-        for (let instruction of instructions) {
-            if (instruction.getInstruction() == Keyword.EXPOSE) {
-                instruction.getArguments().map((arg) => {
-                    if(arg.getValue().match(/\d+-\d+/)){ //E.g. 3000-3009
-                        let rangePorts : number[] = arg.getValue().split("-").map((value)=>parseInt(value));
-                        for(let i = rangePorts[0]; i <= rangePorts[1]; i++){
-                            rangesInFile.push(arg.getRange());
-                            ports.push(i);
-                            protocols.push("tcp"); //Ranged ports are always tcp
-                        }
-                    }else{
-                        const splitPortProtocol = arg.getValue().split("/");
-                        rangesInFile.push(arg.getRange());
-                        ports.push(parseInt(splitPortProtocol[0]));
-                        protocols.push(splitPortProtocol[1] ? splitPortProtocol[1] : "tcp"); //Default protocol is tcp
-                    }
-                });
-            }
-        }
-
-        if(ports.length == 0){ //No exposed ports
-            return;
-        }
-
-        container.inspect(function (err, data) {
-            if (err) {
-                analysis.log("ERROR INSPECTING CONTAINER", err);
-                return;
-            }
-            const mappings = data.NetworkSettings.Ports;
-            for (let i = 0; i < rangesInFile.length; i++) {
-                mappedPorts.push(parseInt(mappings[ports[i] + "/" + protocols[i]][0].HostPort));
-            }
-
-            //!SANITIZE
-            child_process.exec(`nmap -oX - 127.0.0.1 -p ${mappedPorts.join(",")} -sV`, (err: child_process.ExecException, stdout: string, _stderr: string) => {
-                if(err){
-                    analysis.log("ERROR EXECUTING NMAP",err.message);
-                    return;
-                }
-                //!VERIFY IF ANALYSIS IS LATEST
-                xml2js.parseString(stdout,(err: Error,result) => {
-                    if(err){
-                        analysis.log("ERROR PARSING NMAP OUTPUT XML", err.message);
-                        return;
-                    }
-                    try{
-                        const nmapPorts : Array<any> = result['nmaprun']['host']['0']['ports']['0']['port'];
-                        for(const nmapPort of nmapPorts){
-                            const portID = parseInt(nmapPort['$']['portid']);
-                            const protocol = nmapPort['$']['protocol'];
-                            const serviceName = nmapPort['service'][0]['$']['name'];
-                            const serviceProduct = nmapPort['service'][0]['$']['product'];
-                            const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
-
-                            const index = mappedPorts.findIndex((value,_index,_obj)=>(value == portID));
-
-                            //? Assumes that when nmap can't identify the service there's nothing running there. 
-                            //? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
-                            //? If this assumption is proven wrong, fallback on inspec to check if the port is listening
-                            if(serviceName != "tcpwrapped"){
-                                let msg = `Port ${ports[index]} (exposed on ${portID}) - ${protocol}`;
-                                if(serviceName){
-                                    msg += "/" + serviceName;
-                                }
-                                if(serviceProduct){
-                                    msg += " - " + serviceProduct;
-                                }
-                                if(serviceExtrainfo){
-                                    msg += " (" + serviceExtrainfo + ")";
-                                }
-                                
-                                analysis.addDiagnostic(DiagnosticSeverity.Hint,rangesInFile[index],msg);
-                            }else{
-                                analysis.addDiagnostic(DiagnosticSeverity.Error,rangesInFile[index],`Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`);
-                            }
-                        }
-                        sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-                    }catch(e){
-                        analysis.log("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
-                    }
-                });
-            })
-        });
-    }
-
-    private runContainer(analysis: DynamicAnalysis, entrypoint: Instruction, sendDiagnostics: Function, document: TextDocument, SA_problems: Diagnostic[], instructions: Instruction[]) {
-        const isLatest = (): boolean => {
-            return analysis == this.currentDynAnalysis;
-        };
-
-        this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + analysis.version, HostConfig: { PublishAllPorts: true } }, (err, container) => {
-            analysis.container = container;
-
-            if (!isLatest()) {
-                return;
-            }
-
-            if (err) {
-                analysis.log("ERROR CREATING CONTAINER", err);
-                analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Error creating container - " + err);
-                sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-            }
-
-            container.start((err, data) => {
-                if (!isLatest()) {
-                    return;
-                }
-                if (err) {
-                    analysis.log("ERROR STARTING CONTAINER", err);
-                    analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Error starting container - " + err);
-                    sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-                }
-                analysis.log("STARTED CONTAINER", data);
-
-                this.runNmap(instructions, container, analysis, sendDiagnostics, SA_problems, document);
-            });
-
-            container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
-                if (!isLatest()) {
-                    return;
-                }
-                if (err) {
-                    analysis.log("ERROR ATTACHING TO CONTAINER", err);
-                    analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Error attaching to container - " + err);
-                    sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-                }
-                stream.on('data', (data) => {
-                    analysis.log("CONTAINER STDOUT", data);
-                });
-                stream.on('end', (_) => {
-                    container.wait((err, data) => {
-                        if (!isLatest()) {
-                            return;
-                        }
-                        if (err) {
-                            analysis.log("ERROR GETTING CONTAINER EXIT CODE", err);
-                        }
-                        analysis.log("CONTAINER CLOSED WITH CODE " + data.StatusCode);
-                        if (data.StatusCode != 0) {
-                            analysis.addDiagnostic(DiagnosticSeverity.Error, entrypoint.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
-                            sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-                        }
-                    });
-                });
-            });
-        });
-    }
-
-    private dynamicAnalysis(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, SA_problems: Diagnostic[], instructions: Instruction[], entrypoint: Instruction) {
-        let dockerfilePath: string;
-        if (process.platform === "win32") {
-            dockerfilePath = decodeURIComponent(uri2path(document.uri)).substr(1);
-        } else {
-            dockerfilePath = decodeURIComponent(uri2path(document.uri));
-        }
-        const directory = path.dirname(dockerfilePath);
-        const tmpFileName = "tmp.Dockerfile"; //TODO - ADD TEMPORARY FILE TO VSCODE and GIT IGNORE (or simply move to a different directory)
-
-        const tardir = tar.pack(directory);
-        fs.writeFileSync(directory + "/" + tmpFileName, document.getText());
-
-        this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
-            const analysis: DynamicAnalysis = new DynamicAnalysis(stream, document.version);
-            let currentStep: number = 1;
-
-            if (error) {
-                console.log(analysis.log(error));
-                return;
-            }
-
-            if (this.currentDynAnalysis == null) {
-                this.currentDynAnalysis = analysis;
-            } else if (this.currentDynAnalysis.version < analysis.version) {
-                this.currentDynAnalysis.log("Killed on purpose");
-                this.currentDynAnalysis.destroy();
-                this.currentDynAnalysis = analysis;
-            } else {
-                analysis.destroy();
-            }
-
-            stream.on('end', () => {
-                if (DEBUG)
-                    analysis.log("End of Stream");
-                sendProgress(true);
-            });
-            stream.on('error', (error: Buffer) => {
-                analysis.log("Error", error.toString());
-            });
-            stream.on('data', (dataBuffer: Buffer) => {
-                if (this.currentDynAnalysis != analysis) {
-                    analysis.destroy();
-                }
-
-                const dataArray = dataBuffer.toString().split('\n');
-                for (let data of dataArray) {
-                    try {
-                        const parsedData = JSON.parse(json_escape(data.toString()));
-                        if (parsedData["stream"]) {
-                            analysis.log("Stream", parsedData["stream"]);
-
-                            if (parsedData["stream"].match(/Step \d+\/\d+ :/)) {
-                                try {
-                                    const tokenizedData: string[] = parsedData["stream"].split("/");
-
-                                    currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
-                                    //const totalSteps = parseInt(tokenizedData[1].match(/\d+/)[0]);
-
-                                    sendProgress(parsedData["stream"]);
-                                } catch (e) {
-                                    analysis.log("Something went wrong parsing Docker build steps...");
-                                }
-                            }
-
-                            if (parsedData["stream"].match("Successfully built")) {
-                                analysis.diagnostics = [];
-                                sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-
-                                this.runContainer(analysis, entrypoint, sendDiagnostics, document, SA_problems, instructions);
-                            }
-                        } else if (parsedData["status"]) {
-                            analysis.log("Status", parsedData["status"]);
-                        } else if (parsedData["errorDetail"]) {
-                            analysis.addDiagnostic(DiagnosticSeverity.Error, instructions[currentStep - 1].getRange(), parsedData["errorDetail"]["message"]);
-                            sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
-                            analysis.log("ErrorDetail", parsedData["errorDetail"]["message"]);
-                        } else {
-                            if (DEBUG) {
-                                analysis.log("Other", data.toString());
-                            }
-                        }
-                    } catch (e) {
-                        if (DEBUG && data.toString()) {
-                            analysis.log("Skipped build message", data.toString(), "Due to", e);
-                        }
-                    }
-                }
-            });
-        });
     }
 
     private validateInstruction(document: TextDocument, escapeChar: string, instruction: Instruction, keyword: string, isTrigger: boolean, problems: Diagnostic[]): void {
@@ -1983,8 +1738,4 @@ export class Validator {
             source: "dockerfile-utils",
         };
     }
-}
-
-function json_escape(str: string) {
-    return str.replace("\\n", "").replace("\n", "");
 }
