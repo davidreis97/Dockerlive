@@ -194,5 +194,5 @@ const validator = new Validator();
  */
 export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, settings?: ValidatorSettings): Diagnostic[] {
     validator.setSettings(settings);
-    return validator.validate(document,sendDiagnostics, sendProgress);
+    return validator.validate(document, sendDiagnostics, sendProgress);
 }

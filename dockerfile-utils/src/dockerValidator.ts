@@ -56,16 +56,16 @@ export class Validator {
             this.settings = settings;
         }
 
-        this.docker = new Promise(async (res,rej) => {
-            const docker : Dockerode = new Dockerode();
+        this.docker = new Promise(async (res, rej) => {
+            const docker: Dockerode = new Dockerode();
             docker.listContainers({ all: true }, async (_err, containers) => {
-                for(let containerInfo of containers){
+                for (let containerInfo of containers) {
                     if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
                         console.log("REMOVING TEST CONTAINER - " + containerInfo.Names[0]);
                         await docker.getContainer(containerInfo.Id).remove({ v: true, force: true });
                     }
                 }
-    
+
                 console.log("DOCKER INITIALIZED");
                 res(docker);
             });
@@ -351,16 +351,16 @@ export class Validator {
             }
 
             this.docker.then((docker_instance: Dockerode) => {
-                if(this.dynamicAnalysis && this.dynamicAnalysis.document.version > document.version){
+                if (this.dynamicAnalysis && this.dynamicAnalysis.document.version > document.version) {
                     return [];
-                }else{
-                    if(this.dynamicAnalysis){
+                } else {
+                    if (this.dynamicAnalysis) {
                         this.dynamicAnalysis.destroy();
                     }
                     this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, problems, instructions, entrypoint, docker_instance);
                 }
             });
-            
+
         }
 
         return problems;
