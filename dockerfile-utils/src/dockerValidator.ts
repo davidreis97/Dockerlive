@@ -17,7 +17,7 @@ import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
 
-export const DEBUG = true;
+export const DEBUG = false;
 
 export const KEYWORDS = [
     "ADD",
@@ -364,25 +364,35 @@ export class Validator {
         return problems;
     }
 
-    private runNmap(instructions: Instruction[], container: any, analysis: DynamicAnalysis) {
+    private runNmap(instructions: Instruction[], container: any, analysis: DynamicAnalysis, sendDiagnostics: Function, SA_problems: Diagnostic[], document: TextDocument) {
         const rangesInFile: Range[] = [];
         const ports: number[] = [];
         const protocols: string[] = [];
         const mappedPorts: number[] = [];
-        let diagnosticMessages: string[];
 
         for (let instruction of instructions) {
             if (instruction.getInstruction() == Keyword.EXPOSE) {
                 instruction.getArguments().map((arg) => {
-                    const splitPortProtocol = arg.getValue().split("/");
-                    rangesInFile.push(arg.getRange());
-                    ports.push(parseInt(splitPortProtocol[0]));
-                    protocols.push(splitPortProtocol[1] ? splitPortProtocol[1] : "tcp"); //Default protocol is tcp
+                    if(arg.getValue().match(/\d+-\d+/)){ //E.g. 3000-3009
+                        let rangePorts : number[] = arg.getValue().split("-").map((value)=>parseInt(value));
+                        for(let i = rangePorts[0]; i <= rangePorts[1]; i++){
+                            rangesInFile.push(arg.getRange());
+                            ports.push(i);
+                            protocols.push("tcp"); //Ranged ports are always tcp
+                        }
+                    }else{
+                        const splitPortProtocol = arg.getValue().split("/");
+                        rangesInFile.push(arg.getRange());
+                        ports.push(parseInt(splitPortProtocol[0]));
+                        protocols.push(splitPortProtocol[1] ? splitPortProtocol[1] : "tcp"); //Default protocol is tcp
+                    }
                 });
             }
         }
 
-        diagnosticMessages = Array(ports.length);
+        if(ports.length == 0){ //No exposed ports
+            return;
+        }
 
         container.inspect(function (err, data) {
             if (err) {
@@ -400,6 +410,7 @@ export class Validator {
                     analysis.log("ERROR EXECUTING NMAP",err.message);
                     return;
                 }
+                //!VERIFY IF ANALYSIS IS LATEST
                 xml2js.parseString(stdout,(err: Error,result) => {
                     if(err){
                         analysis.log("ERROR PARSING NMAP OUTPUT XML", err.message);
@@ -414,20 +425,29 @@ export class Validator {
                             const serviceProduct = nmapPort['service'][0]['$']['product'];
                             const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
 
-                            const index = mappedPorts.findIndex((value,_index,_obj)=>{value == portID}); //!NOT WORKING AS INTENDED
-                            diagnosticMessages[index] = protocol;
-                            if(serviceName){
-                                diagnosticMessages[index] += "/" + serviceName;
-                            }
-                            if(serviceProduct){
-                                diagnosticMessages[index] += " - " + serviceProduct;
-                            }
-                            if(serviceExtrainfo){
-                                diagnosticMessages[index] += " (" + serviceExtrainfo + ")";
+                            const index = mappedPorts.findIndex((value,_index,_obj)=>(value == portID));
+
+                            //? Assumes that when nmap can't identify the service there's nothing running there. 
+                            //? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
+                            //? If this assumption is proven wrong, fallback on inspec to check if the port is listening
+                            if(serviceName != "tcpwrapped"){
+                                let msg = `Port ${ports[index]} (exposed on ${portID}) - ${protocol}`;
+                                if(serviceName){
+                                    msg += "/" + serviceName;
+                                }
+                                if(serviceProduct){
+                                    msg += " - " + serviceProduct;
+                                }
+                                if(serviceExtrainfo){
+                                    msg += " (" + serviceExtrainfo + ")";
+                                }
+                                
+                                analysis.addDiagnostic(DiagnosticSeverity.Hint,rangesInFile[index],msg);
+                            }else{
+                                analysis.addDiagnostic(DiagnosticSeverity.Error,rangesInFile[index],`Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`);
                             }
                         }
-
-                        console.log(diagnosticMessages);
+                        sendDiagnostics(document.uri, analysis.diagnostics.concat(SA_problems));
                     }catch(e){
                         analysis.log("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
                     }
@@ -465,7 +485,7 @@ export class Validator {
                 }
                 analysis.log("STARTED CONTAINER", data);
 
-                this.runNmap(instructions, container, analysis);
+                this.runNmap(instructions, container, analysis, sendDiagnostics, SA_problems, document);
             });
 
             container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
