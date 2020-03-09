@@ -344,7 +344,16 @@ export class Validator {
             this.validateInstruction(document, escapeChar, instruction, instruction.getKeyword(), true, problems);
         }
 
-        if (problems.length == 0) { //Should instead check if static analysis found errors, since warnings shouldn't stop dynamic analysis
+        let foundError = false;
+
+        for(let problem of problems){
+            if (problem.severity == DiagnosticSeverity.Error) {
+                foundError = true;
+                break;
+            }
+        }
+
+        if (!foundError) {
             let entrypoint: Instruction = instructions[instructions.length - 1];
             if (entrypoints[0] != null) {
                 entrypoint = entrypoints[0];

@@ -56,8 +56,6 @@ export class DynamicAnalysis {
 	}
 
 	buildContainer() {
-		console.log
-
 		let dockerfilePath: string;
 		if (process.platform === "win32") {
 			dockerfilePath = decodeURIComponent(uri2path(this.document.uri)).substr(1);
@@ -75,7 +73,7 @@ export class DynamicAnalysis {
 			let currentStep: number = 1;
 
 			if (error) {
-				console.log(this.log(error));
+				this.log(error);
 				return;
 			}
 
@@ -257,7 +255,11 @@ export class DynamicAnalysis {
 
 			this.sendProgress("Running nmap...");
 
-			child_process.exec(`nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV`, (err: child_process.ExecException, stdout: string, _stderr: string) => {
+			const nmapCommand = `nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV`;
+
+			this.log("Running: " + nmapCommand);
+
+			child_process.exec(nmapCommand, (err: child_process.ExecException, stdout: string, _stderr: string) => {
 				if (err) {
 					this.log("ERROR EXECUTING NMAP", err.message);
 					this.sendProgress(true);
