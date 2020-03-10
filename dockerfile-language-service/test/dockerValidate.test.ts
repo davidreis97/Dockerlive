@@ -26,20 +26,20 @@ describe("Docker Validation Tests", () => {
 
     it("settings ignore case ignore", () => {
         let document = TextDocument.create("","",0,"from node");
-        let problems = service.validate(document, null, null, { instructionCasing: ValidationSeverity.IGNORE });
+        let problems = service.validate(document, null, null, null, { instructionCasing: ValidationSeverity.IGNORE });
         assert.equal(0, problems.length);
     });
 
     it("settings ignore case warning", () => {
         let document = TextDocument.create("","",0,"from node");
-        let problems = service.validate(document, null, null, { instructionCasing: ValidationSeverity.WARNING });
+        let problems = service.validate(document, null, null, null, { instructionCasing: ValidationSeverity.WARNING });
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Warning);
     });
 
     it("settings ignore case error", () => {
         let document = TextDocument.create("","",0,"from node");
-        let problems = service.validate(document, null, null, { instructionCasing: ValidationSeverity.ERROR });
+        let problems = service.validate(document, null, null, null, { instructionCasing: ValidationSeverity.ERROR });
         assert.equal(1, problems.length);
         assertInstructionCasing(problems[0], DiagnosticSeverity.Error);
     });

@@ -13,6 +13,7 @@ import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
 const stripAnsi = require('strip-ansi');
+import { inspect } from 'util'
 
 export const DEBUG = false;
 
@@ -21,6 +22,7 @@ export class DynamicAnalysis {
 	public document: TextDocument;
 	public sendDiagnostics: Function;
 	public sendProgress: Function;
+	public sendPerformanceStats: Function;
 	public DA_problems: Diagnostic[];
 	public SA_problems: Diagnostic[];
 	public instructions: Instruction[];
@@ -30,10 +32,14 @@ export class DynamicAnalysis {
 
 	public isDestroyed: boolean = false;
 
-	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, SA_problems: Diagnostic[], instructions: Instruction[], entrypoint: Instruction, docker: Dockerode) {
+	public readonly performanceUpdateFrequency: number = 100000;
+	public performanceTimeout : NodeJS.Timeout;
+
+	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], instructions: Instruction[], entrypoint: Instruction, docker: Dockerode) {
 		this.document = document;
 		this.sendDiagnostics = sendDiagnostics;
 		this.sendProgress = sendProgress;
+		this.sendPerformanceStats = sendPerformanceStats;
 		this.DA_problems = [];
 		this.SA_problems = SA_problems;
 		this.instructions = instructions;
@@ -170,6 +176,8 @@ export class DynamicAnalysis {
 				this.log("STARTED CONTAINER", data);
 
 				this.runNmap();
+				this.getPerformance();
+				//this.performanceTimeout = setInterval(this.getPerformance.bind(this),this.performanceUpdateFrequency);
 			});
 
 			container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
@@ -318,6 +326,51 @@ export class DynamicAnalysis {
 		});
 	}
 
+	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L175-L188
+	private calculateCPUPercent(stats){
+		let cpuPercent = 0;
+		let cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
+		let systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
+		let cpuCount = stats.cpu_stats.cpu_usage.percpu_usage.length;
+
+		if(systemDelta && cpuDelta){
+			cpuPercent = (cpuDelta / systemDelta) * cpuCount * 100;
+		}
+
+		return cpuPercent;
+	}
+
+	private getPerformance(){
+		if (this.isDestroyed) {
+			return;
+		}
+
+		this.container.stats((err, stream) => {
+			if (err) {
+				this.log(err);
+				return;
+			}
+
+			stream.on('data', (data: Buffer) => {
+				let parsedData = JSON.parse(data.toString());
+
+				this.sendPerformanceStats({
+					cpu : {
+						percentage : this.calculateCPUPercent(parsedData) //TODO - Double check that this works for unix systems
+					},
+					memory : {
+						usage : parsedData.memory_stats.usage,
+						limit : parsedData.memory_stats.limit,
+					}
+				});
+			});
+
+			if (this.isDestroyed) {
+				return;
+			}
+		});
+	}
+
 	destroy() {
 		this.isDestroyed = true;
 
@@ -328,7 +381,7 @@ export class DynamicAnalysis {
 		if (this.stream) {
 			try {
 				this.stream.destroy();
-				this.log("Build Stream Terminated")
+				this.log("Build Stream Terminated");
 			} catch (e) {
 				this.log("Could not destroy stream - " + e);
 			}
@@ -337,10 +390,15 @@ export class DynamicAnalysis {
 		if (this.container) {
 			try {
 				this.container.remove({ v: true, force: true });
-				this.log("Container Terminated")
+				this.log("Container Terminated");
 			} catch (e) {
 				this.log("Could not remove container - " + e);
 			}
+		}
+
+		if (this.performanceTimeout){
+			clearInterval(this.performanceTimeout);
+			this.log("Stopped retrieving performance");
 		}
 	}
 

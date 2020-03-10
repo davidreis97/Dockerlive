@@ -17,10 +17,31 @@
 		"vscode": "^1.33.0"
 	},
 	"activationEvents": [
-		"onLanguage:plaintext"
+		"onLanguage:dockerfile",
+		"onCommand:dockerlive.showPerformance"
 	],
 	"main": "./client/out/extension",
 	"contributes": {
+		"commands": [
+			{
+				"command": "dockerlive.showPerformance",
+				"title": "Display Performance of Test Container",
+				"category": "Dockerlive Container Performance",
+				"icon": {
+					"light": "./resources/light.svg",
+					"dark": "./resources/dark.svg"
+				}
+			}
+		],
+		"menus": {
+			"editor/title": [
+				{
+					"when": "resourceLangId == dockerfile",
+					"command": "dockerlive.showPerformance",
+					"group": "navigation"
+				}
+			]
+		},
 		"configuration": {
 			"type": "object",
 			"title": "Example configuration",

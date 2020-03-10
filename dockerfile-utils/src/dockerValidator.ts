@@ -234,7 +234,7 @@ export class Validator {
         }
     }
 
-    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function): Diagnostic[] {
+    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function): Diagnostic[] {
         this.document = document;
         let problems: Diagnostic[] = [];
         let dockerfile = DockerfileParser.parse(document.getText());
@@ -366,7 +366,7 @@ export class Validator {
                     if (this.dynamicAnalysis) {
                         this.dynamicAnalysis.destroy();
                     }
-                    this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, problems, instructions, entrypoint, docker_instance);
+                    this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, problems, instructions, entrypoint, docker_instance);
                 }
             });
 
@@ -1731,7 +1731,7 @@ export class Validator {
             message: description,
             severity: severity,
             code: code,
-            source: "DockerLive",
+            source: "dockerlive",
         };
     }
 

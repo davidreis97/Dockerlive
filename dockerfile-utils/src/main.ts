@@ -192,7 +192,7 @@ const validator = new Validator();
 /**
  * Validates the Dockerfile that is contained in the given string.
  */
-export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, settings?: ValidatorSettings): Diagnostic[] {
+export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, settings?: ValidatorSettings): Diagnostic[] {
     validator.setSettings(settings);
-    return validator.validate(document, sendDiagnostics, sendProgress);
+    return validator.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats);
 }
