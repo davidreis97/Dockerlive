@@ -26,7 +26,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.onNotification("dockerlive/performanceStats",(data) => {
 			let message = pGraphs.update(data);
 
-			if(!currentPanel || !currentPanel.visible){
+			if(!currentPanel){
 				return; //No need to update graph if the webview panel doesn't exist / isn't visible
 			}else{
 				currentPanel.webview.postMessage(message);
@@ -55,6 +55,10 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 			}else{
 				currentPanel.reveal();
 			}
+
+			currentPanel.onDidDispose((_e) => {
+				currentPanel = null;
+			})
 
 			currentPanel.webview.html = pGraphs.getHTML();
 		})
