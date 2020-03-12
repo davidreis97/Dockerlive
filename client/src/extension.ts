@@ -20,20 +20,22 @@ let currentPanel: vscode.WebviewPanel | undefined;
 export async function activate(context: vscode.ExtensionContext) {
 	let pGraphs = new PerformanceGraphs();
 
-	initializePerformanceWebview(context);
+	initializePerformanceWebview(context, pGraphs);
 	initializeLanguageServer(context).then((_client : LanguageClient) => {
 		client = _client;
 		client.onNotification("dockerlive/performanceStats",(data) => {
-			if(!currentPanel){ //Information is always sent by the server anyway - it'd be more efficent to only send information if the panel was open
-				return;
+			let message = pGraphs.update(data);
+
+			if(!currentPanel || !currentPanel.visible){
+				return; //No need to update graph if the webview panel doesn't exist / isn't visible
+			}else{
+				currentPanel.webview.postMessage(message);
 			}
-			pGraphs.update(data);
-			currentPanel.webview.html = pGraphs.getHTML();
 		});
 	});
 }
 
-async function initializePerformanceWebview(context: vscode.ExtensionContext) {
+async function initializePerformanceWebview(context: vscode.ExtensionContext, pGraphs: PerformanceGraphs) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('dockerlive.showPerformance', () => {
 			const columnToShowIn = vscode.window.activeTextEditor
@@ -53,6 +55,8 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext) {
 			}else{
 				currentPanel.reveal();
 			}
+
+			currentPanel.webview.html = pGraphs.getHTML();
 		})
 	);
 }

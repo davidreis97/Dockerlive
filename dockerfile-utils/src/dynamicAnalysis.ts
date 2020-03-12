@@ -18,7 +18,7 @@ import { inspect } from 'util'
 export const DEBUG = false;
 
 export class DynamicAnalysis {
-	public stream: Duplex;
+	public buildStream: Duplex;
 	public document: TextDocument;
 	public sendDiagnostics: Function;
 	public sendProgress: Function;
@@ -75,7 +75,7 @@ export class DynamicAnalysis {
 		fs.writeFileSync(directory + "/" + tmpFileName, this.document.getText());
 
 		this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
-			this.stream = stream;
+			this.buildStream = stream;
 			let currentStep: number = 1;
 
 			if (error) {
@@ -351,23 +351,31 @@ export class DynamicAnalysis {
 				return;
 			}
 
+			if (this.isDestroyed) {
+				return;
+			}
+
 			stream.on('data', (data: Buffer) => {
+				//this.log("STATS RECEIVED");
 				let parsedData = JSON.parse(data.toString());
 
 				this.sendPerformanceStats({
+					running: true,
 					cpu : {
 						percentage : this.calculateCPUPercent(parsedData) //TODO - Double check that this works for unix systems
 					},
 					memory : {
 						usage : parsedData.memory_stats.usage,
-						limit : parsedData.memory_stats.limit,
+						limit : parsedData.memory_stats.limit
 					}
 				});
 			});
 
-			if (this.isDestroyed) {
-				return;
-			}
+			stream.on('end', () => {
+				this.sendPerformanceStats({
+					running: false
+				});
+			});
 		});
 	}
 
@@ -378,12 +386,12 @@ export class DynamicAnalysis {
 
 		this.sendProgress(true);
 
-		if (this.stream) {
+		if (this.buildStream) {
 			try {
-				this.stream.destroy();
+				this.buildStream.destroy();
 				this.log("Build Stream Terminated");
 			} catch (e) {
-				this.log("Could not destroy stream - " + e);
+				this.log("Could not destroy build stream - " + e);
 			}
 		}
 
