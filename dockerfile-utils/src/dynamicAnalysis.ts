@@ -326,7 +326,7 @@ export class DynamicAnalysis {
 		});
 	}
 
-	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L106-L125
+	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L175-L188
 	private calculateCPUPercent(stats){
 		let cpuPercent = 0;
 		let cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
@@ -354,6 +354,7 @@ export class DynamicAnalysis {
 		return finalNetworks;
 	}
 
+	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L106-L125
 	private calculateStorage(stats){
 		let readBytes = 0;
 		let writeBytes = 0;
