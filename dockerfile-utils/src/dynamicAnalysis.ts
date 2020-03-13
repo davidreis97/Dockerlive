@@ -15,7 +15,12 @@ import xml2js from 'xml2js';
 const stripAnsi = require('strip-ansi');
 import { inspect } from 'util'
 
-export const DEBUG = false;
+export const DEBUG = true;
+
+interface ExecData {
+	output: string,
+	exitCode: number
+}
 
 export class DynamicAnalysis {
 	public buildStream: Duplex;
@@ -33,7 +38,7 @@ export class DynamicAnalysis {
 	public isDestroyed: boolean = false;
 
 	public readonly performanceUpdateFrequency: number = 100000;
-	public performanceTimeout : NodeJS.Timeout;
+	public performanceTimeout: NodeJS.Timeout;
 
 	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], instructions: Instruction[], entrypoint: Instruction, docker: Dockerode) {
 		this.document = document;
@@ -177,6 +182,7 @@ export class DynamicAnalysis {
 
 				this.runNmap();
 				this.getPerformance();
+				this.getOS();
 				//this.performanceTimeout = setInterval(this.getPerformance.bind(this),this.performanceUpdateFrequency);
 			});
 
@@ -202,8 +208,9 @@ export class DynamicAnalysis {
 						}
 						if (err) {
 							this.log("ERROR GETTING CONTAINER EXIT CODE", err);
+							return;
 						}
-						this.log("CONTAINER CLOSED WITH CODE " + data.StatusCode);
+						this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
 						if (data.StatusCode != 0) {
 							this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
 							this.publishDiagnostics();
@@ -212,6 +219,90 @@ export class DynamicAnalysis {
 				});
 			});
 		});
+	}
+
+	private execWithStatusCode(cmd): Promise<ExecData> {
+		return new Promise((res, _rej) => {
+			this.container.exec({ Cmd: cmd, AttachStdout: true, AttachStderr: true }, (err, exec) => {
+				if (err) {
+					this.log("ERROR CREATING EXEC", cmd, err);
+					res(null);
+					return;
+				}
+
+				let output = "";
+
+				exec.start((err, stream) => {
+					if (err) {
+						this.log("ERROR STARTING EXEC", cmd, err);
+						res(null);
+						return;
+					}
+
+					stream.on('data', (data) => {
+						output += data;
+						this.log("EXEC DATA", cmd, data);
+					});
+					stream.on('end', (data) => {
+						this.log("EXEC END", cmd, data);
+						exec.inspect((err, data) => {
+							if (err) {
+								this.log("ERROR INSPECTING EXEC", cmd, err);
+								res(null);
+								return;
+							}
+							res({
+								output: output,
+								exitCode: data.ExitCode
+							});
+						});
+					});
+				});
+			});
+		});
+	}
+
+	/*
+		1st try - cat /etc/os-release
+		2nd try - cat /etc/lsb-release
+		3rd try - cat /etc/issue
+		4th try - cat /proc/version
+		5th try - uname
+
+		If all fails, probably not a linux distribution
+	*/
+	private async getOS() {
+		let os_release = await this.execWithStatusCode(['cat', '/etc/os-release']);
+
+		if(os_release.exitCode == 0){
+			//Process os_release, generate diagnostic, return
+		}
+
+		let lsb_release = await this.execWithStatusCode(['cat', '/etc/lsb-release']);
+
+		if(lsb_release.exitCode == 0){
+			//Process lsb_release, generate diagnostic, return
+		}
+
+		let issue = await this.execWithStatusCode(['cat', '/etc/issue']);
+
+		if(issue.exitCode == 0){
+			//Process issue, generate diagnostic, return
+		}
+
+		let version = await this.execWithStatusCode(['cat', '/proc/version']);
+
+		if(version.exitCode == 0){
+			//Process version, generate diagnostic, return
+		}
+
+		let uname = await this.execWithStatusCode(['uname']);
+
+		if(uname.exitCode == 0){
+			//Process uname, generate diagnostic, return
+		}
+
+		//Probably not linux - generate diagnostic, return
 	}
 
 	private runNmap() {
@@ -327,24 +418,24 @@ export class DynamicAnalysis {
 	}
 
 	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L175-L188
-	private calculateCPUPercent(stats){
+	private calculateCPUPercent(stats) {
 		let cpuPercent = 0;
 		let cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
 		let systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
 		let cpuCount = stats.cpu_stats.cpu_usage.percpu_usage.length;
 
-		if(systemDelta && cpuDelta){
+		if (systemDelta && cpuDelta) {
 			cpuPercent = (cpuDelta / systemDelta) * cpuCount * 100;
 		}
 
 		return cpuPercent;
 	}
 
-	private calculateNetworks(stats){
+	private calculateNetworks(stats) {
 		let rawNetworks = stats.networks;
 		let finalNetworks = {};
 
-		for(let key of Object.keys(rawNetworks)){
+		for (let key of Object.keys(rawNetworks)) {
 			finalNetworks[key] = {
 				input: rawNetworks[key].rx_bytes,
 				output: rawNetworks[key].tx_bytes
@@ -355,18 +446,18 @@ export class DynamicAnalysis {
 	}
 
 	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L106-L125
-	private calculateStorage(stats){
+	private calculateStorage(stats) {
 		let readBytes = 0;
 		let writeBytes = 0;
 
 		if (process.platform === "win32") {
 			readBytes = stats.storage_stats.read_size_bytes || 0;
 			writeBytes = stats.storage_stats.write_size_bytes || 0;
-		}else{
-			for(let entry of stats.io_service_bytes_recursive){
-				if(entry.op == "read"){
+		} else {
+			for (let entry of stats.io_service_bytes_recursive) {
+				if (entry.op == "read") {
 					readBytes += entry.value;
-				}else if(entry.op == "write"){
+				} else if (entry.op == "write") {
 					writeBytes += entry.value;
 				}
 			}
@@ -378,7 +469,7 @@ export class DynamicAnalysis {
 		}
 	}
 
-	private getPerformance(){
+	private getPerformance() {
 		if (this.isDestroyed) {
 			return;
 		}
@@ -399,15 +490,15 @@ export class DynamicAnalysis {
 
 				this.sendPerformanceStats({
 					running: true,
-					cpu : {
-						percentage : this.calculateCPUPercent(parsedData) //TODO - Double check that this works for unix systems
+					cpu: {
+						percentage: this.calculateCPUPercent(parsedData) //TODO - Double check that this works for unix systems
 					},
-					memory : {
-						usage : parsedData.memory_stats.usage,
-						limit : parsedData.memory_stats.limit
+					memory: {
+						usage: parsedData.memory_stats.usage,
+						limit: parsedData.memory_stats.limit
 					},
 					networks: this.calculateNetworks(parsedData),
-					storage : this.calculateStorage(parsedData)
+					storage: this.calculateStorage(parsedData)
 				});
 			});
 
@@ -444,7 +535,7 @@ export class DynamicAnalysis {
 			}
 		}
 
-		if (this.performanceTimeout){
+		if (this.performanceTimeout) {
 			clearInterval(this.performanceTimeout);
 			this.log("Stopped retrieving performance");
 		}
