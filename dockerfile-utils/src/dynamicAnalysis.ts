@@ -12,8 +12,8 @@ import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
+import parsePairs from "parse-pairs";
 const stripAnsi = require('strip-ansi');
-import { inspect } from 'util'
 
 export const DEBUG = true;
 
@@ -279,37 +279,78 @@ export class DynamicAnalysis {
 		If all fails, probably not a linux distribution
 	*/
 	private async getOS() {
+		let fromInstruction = this.instructions.find((value, _index, _obj) => value.getInstruction() == "FROM");
+
 		let os_release = await this.execWithStatusCode(['cat', '/etc/os-release']);
 
-		if(os_release.exitCode == 0){
-			//Process os_release, generate diagnostic, return
+		if (os_release && os_release.exitCode == 0) {
+			this.debugLog("Detected OS via", "os_release");
+
+			/* //? If too overwhelming - display less information
+			let diagMessage : string = "OS Information: \n\n";
+			
+			let parsedOSData = parsePairs(os_release.output);
+			if(parsedOSData.PRETTY_NAME && parsedOSData.PRETTY_NAME != "Linux"){
+				diagMessage += parsedOSData.PRETTY_NAME;
+			}else{
+				diagMessage += parsedOSData.NAME;
+			}
+			*/
+
+			let diagMessage: string = "OS Information: \n\n" + os_release.output;
+
+			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
+			this.publishDiagnostics();
+			return;
 		}
 
 		let lsb_release = await this.execWithStatusCode(['cat', '/etc/lsb-release']);
 
-		if(lsb_release.exitCode == 0){
-			//Process lsb_release, generate diagnostic, return
+		if (lsb_release && lsb_release.exitCode == 0) {
+			this.debugLog("Detected OS via", "lsb-release");
+			let diagMessage: string = "OS Information: \n\n" + lsb_release.output;
+
+			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
+			this.publishDiagnostics();
+			return;
 		}
 
 		let issue = await this.execWithStatusCode(['cat', '/etc/issue']);
 
-		if(issue.exitCode == 0){
-			//Process issue, generate diagnostic, return
+		if (issue && issue.exitCode == 0) {
+			this.debugLog("Detected OS via", "issue");
+			let diagMessage: string = "OS Information: \n\n" + issue.output;
+
+			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
+			this.publishDiagnostics();
+			return;
 		}
 
 		let version = await this.execWithStatusCode(['cat', '/proc/version']);
 
-		if(version.exitCode == 0){
-			//Process version, generate diagnostic, return
+		if (version && version.exitCode == 0) {
+			this.debugLog("Detected OS via", "version");
+			let diagMessage: string = "OS Information: \n\n" + version.output;
+
+			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
+			this.publishDiagnostics();
+			return;
 		}
 
 		let uname = await this.execWithStatusCode(['uname']);
 
-		if(uname.exitCode == 0){
-			//Process uname, generate diagnostic, return
+		if (uname && uname.exitCode == 0) {
+			this.debugLog("Detected OS via", "uname");
+			let diagMessage: string = "OS Information: \n\n" + uname.output;
+
+			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
+			this.publishDiagnostics();
+			return;
 		}
 
 		//Probably not linux - generate diagnostic, return
+		this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), "Not Linux");
+		this.publishDiagnostics();
 	}
 
 	private runNmap() {
@@ -412,7 +453,7 @@ export class DynamicAnalysis {
 								this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`);
 							}
 						}
-						this.sendDiagnostics(this.document.uri, this.DA_problems.concat(this.SA_problems));
+						this.publishDiagnostics();
 
 						this.sendProgress(true); //! - Probably will need to change when implementing inspec / other feedback
 					} catch (e) {
@@ -564,4 +605,4 @@ export class DynamicAnalysis {
 
 function json_escape(str: string) {
 	return str.replace("\\n", "").replace("\n", "");
-}
+} 
