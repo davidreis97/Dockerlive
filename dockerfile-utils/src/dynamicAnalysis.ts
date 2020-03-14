@@ -237,24 +237,33 @@ export class DynamicAnalysis {
 						return;
 					}
 
-					stream.on('data', (data) => {
-						output += data;
-						this.log("EXEC DATA", cmd, data);
-					});
-					stream.on('end', (data) => {
-						this.log("EXEC END", cmd, data);
+					stream.on('data', async (data: Buffer) => {
+						let sanitized = data.toString('utf8').replace(/[^\x20-\x7E|\n]/g, '');
+
+						output += sanitized;
+						await new Promise(r => setTimeout(r, 100)); //!- Temporary workaround. See stream.on('end')
+
 						exec.inspect((err, data) => {
 							if (err) {
 								this.log("ERROR INSPECTING EXEC", cmd, err);
 								res(null);
 								return;
 							}
-							res({
-								output: output,
-								exitCode: data.ExitCode
-							});
+
+							if (!data.Running) {
+								res({
+									output: output,
+									exitCode: data.ExitCode
+								});
+							}
 						});
 					});
+
+					//! - Not being called, hence the necessity to inspect the exec every time data is received
+					//! - https://github.com/apocas/dockerode/issues/534
+					stream.on('end', () => {
+						this.debugLog("EXEC END");
+					})
 				});
 			});
 		});
