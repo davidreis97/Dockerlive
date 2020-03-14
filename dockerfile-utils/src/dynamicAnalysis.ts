@@ -93,8 +93,7 @@ export class DynamicAnalysis {
 			}
 
 			stream.on('end', () => {
-				if (DEBUG)
-					this.log("End of Stream");
+				this.debugLog("End of Stream");
 			});
 			stream.on('error', (error: Buffer) => {
 				this.log("Error", error.toString());
@@ -135,13 +134,11 @@ export class DynamicAnalysis {
 							this.publishDiagnostics();
 							this.log("ErrorDetail", parsedData["errorDetail"]["message"]);
 						} else {
-							if (DEBUG) {
-								this.log("Other", data.toString());
-							}
+							this.debugLog("Other", data.toString());
 						}
 					} catch (e) {
-						if (DEBUG && data.toString()) {
-							this.log("Skipped build message", data.toString(), "Due to", e);
+						if (data.toString()) {
+							this.debugLog("Skipped build message", data.toString(), "Due to", e);
 						}
 					}
 				}
@@ -539,6 +536,11 @@ export class DynamicAnalysis {
 			clearInterval(this.performanceTimeout);
 			this.log("Stopped retrieving performance");
 		}
+	}
+
+	debugLog(...msgs: String[]) {
+		if (DEBUG)
+			this.log(...msgs);
 	}
 
 	log(...msgs: String[]) {
