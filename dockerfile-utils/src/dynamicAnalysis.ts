@@ -161,6 +161,7 @@ export class DynamicAnalysis {
 				this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Error creating container - " + err);
 				this.publishDiagnostics();
 				this.sendProgress(true);
+				return;
 			}
 
 			this.sendProgress("Starting container...");
@@ -174,13 +175,13 @@ export class DynamicAnalysis {
 					this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Error starting container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
+					return;
 				}
 				this.log("STARTED CONTAINER", data);
 
 				this.runNmap();
 				this.getPerformance();
 				this.getOS();
-				//this.performanceTimeout = setInterval(this.getPerformance.bind(this),this.performanceUpdateFrequency);
 			});
 
 			container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
