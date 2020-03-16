@@ -3,7 +3,7 @@ import {
 } from 'vscode-languageserver-types';
 import { Validator } from './dockerValidator';
 import { ValidationCode } from './main';
-import { Instruction, Keyword } from 'dockerfile-ast';
+import { Instruction, Keyword, Dockerfile } from 'dockerfile-ast';
 import Dockerode from 'dockerode';
 import uri2path = require('file-uri-to-path');
 import path = require('path');
@@ -18,7 +18,7 @@ const stripAnsi = require('strip-ansi');
 export const DEBUG = true;
 
 interface ExecData {
-	output: string,
+	output: Buffer,
 	exitCode: number
 }
 
@@ -30,8 +30,7 @@ export class DynamicAnalysis {
 	public sendPerformanceStats: Function;
 	public DA_problems: Diagnostic[];
 	public SA_problems: Diagnostic[];
-	public instructions: Instruction[];
-	public entrypoint: Instruction;
+	public dockerfile: Dockerfile;
 	public docker: Dockerode;
 	public container: any;
 
@@ -40,15 +39,14 @@ export class DynamicAnalysis {
 	public readonly performanceUpdateFrequency: number = 100000;
 	public performanceTimeout: NodeJS.Timeout;
 
-	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], instructions: Instruction[], entrypoint: Instruction, docker: Dockerode) {
+	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
 		this.document = document;
 		this.sendDiagnostics = sendDiagnostics;
 		this.sendProgress = sendProgress;
 		this.sendPerformanceStats = sendPerformanceStats;
 		this.DA_problems = [];
 		this.SA_problems = SA_problems;
-		this.instructions = instructions;
-		this.entrypoint = entrypoint;
+		this.dockerfile = dockerfile;
 		this.docker = docker;
 
 		this.buildContainer();
@@ -130,7 +128,7 @@ export class DynamicAnalysis {
 						} else if (parsedData["status"]) {
 							this.log("Status", parsedData["status"]);
 						} else if (parsedData["errorDetail"]) {
-							this.addDiagnostic(DiagnosticSeverity.Error, this.instructions[currentStep - 1].getRange(), parsedData["errorDetail"]["message"]);
+							this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getInstructions()[currentStep - 1].getRange(), parsedData["errorDetail"]["message"]);
 							this.publishDiagnostics();
 							this.log("ErrorDetail", parsedData["errorDetail"]["message"]);
 						} else {
@@ -158,7 +156,7 @@ export class DynamicAnalysis {
 
 			if (err) {
 				this.log("ERROR CREATING CONTAINER", err);
-				this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Error creating container - " + err);
+				this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error creating container - " + err);
 				this.publishDiagnostics();
 				this.sendProgress(true);
 				return;
@@ -172,7 +170,7 @@ export class DynamicAnalysis {
 				}
 				if (err) {
 					this.log("ERROR STARTING CONTAINER", err);
-					this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Error starting container - " + err);
+					this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error starting container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
 					return;
@@ -182,6 +180,7 @@ export class DynamicAnalysis {
 				this.runNmap();
 				this.getPerformance();
 				this.getOS();
+				this.checkEnvVar();
 			});
 
 			container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
@@ -191,7 +190,7 @@ export class DynamicAnalysis {
 				}
 				if (err) {
 					this.log("ERROR ATTACHING TO CONTAINER", err);
-					this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Error attaching to container - " + err);
+					this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error attaching to container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
 				}
@@ -210,13 +209,62 @@ export class DynamicAnalysis {
 						}
 						this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
 						if (data.StatusCode != 0) {
-							this.addDiagnostic(DiagnosticSeverity.Error, this.entrypoint.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
+							this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
 							this.publishDiagnostics();
 						}
 					});
 				});
 			});
 		});
+	}
+
+	private async getProcessTree(){
+		//TODO - Implement
+	}
+	
+	private async checkEnvVar() {
+		let envVars = this.dockerfile.getENVs();
+		let parsedEnvVars = {}
+
+		for(let envVar of envVars){
+			for(let arg of envVar.getArguments()){
+				let splitEnvVar = arg.getValue().split("=");
+				parsedEnvVars[splitEnvVar[0]] = {
+					value: splitEnvVar[1],
+					range: arg.getRange()
+				}; //TODO - Resolve variables
+			}
+		}
+
+		await this.getProcessTree();
+
+		let entrypointEnvVars = await this.execWithStatusCode(["cat","/proc/1/environ"]); //TODO - Not robust, unable to trace the envVar change back to a command and misses some cases, for example "env VAR=value node index.js"
+
+		if(entrypointEnvVars.exitCode != 0){
+			this.log("Could not verify envVars at entrypoint",entrypointEnvVars.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+			return;
+		}
+
+		//Entries on file /proc/${pid}/environ are separated by the null character (0x00). Replacing to newline (0x0A).
+		entrypointEnvVars.output = Buffer.from(entrypointEnvVars.output.map((value, _index, _arr) => value == 0x00 ? 0x0A : value));
+		let sanitized = entrypointEnvVars.output.toString().replace(/[^\x20-\x7E|\n]/g, '').replace(/^\s*\n/gm,'');
+
+		//For each line, surround the value side of the key=value pair with brackets - required by parse-pairs package
+		sanitized = sanitized.split("\n").map((value,_index,_arr) => {
+			if(!value.includes("=")) return "";
+			let splitValue = value.split("=");
+			splitValue[1] = `"${splitValue[1]}"`;
+			return splitValue.join("=");
+		}).join('\n');
+
+		let actualEnvVars = parsePairs(sanitized);
+		for(let key of Object.keys(actualEnvVars)){
+			if(parsedEnvVars[key] != null && parsedEnvVars[key].value != actualEnvVars[key]){
+				this.addDiagnostic(DiagnosticSeverity.Information, parsedEnvVars[key].range, `Environment Variable changed.\nValue at start of execution: ${actualEnvVars[key]}`);
+			}
+		}
+
+		this.publishDiagnostics();
 	}
 
 	private execWithStatusCode(cmd): Promise<ExecData> {
@@ -228,7 +276,7 @@ export class DynamicAnalysis {
 					return;
 				}
 
-				let output = "";
+				let outputBuffers = [];
 
 				exec.start((err, stream) => {
 					if (err) {
@@ -238,9 +286,7 @@ export class DynamicAnalysis {
 					}
 
 					stream.on('data', async (data: Buffer) => {
-						let sanitized = data.toString('utf8').replace(/[^\x20-\x7E|\n]/g, '');
-
-						output += sanitized;
+						outputBuffers.push(data);
 						await new Promise(r => setTimeout(r, 100)); //!- Temporary workaround. See stream.on('end')
 
 						exec.inspect((err, data) => {
@@ -252,7 +298,7 @@ export class DynamicAnalysis {
 
 							if (!data.Running) {
 								res({
-									output: output,
+									output: Buffer.concat(outputBuffers),
 									exitCode: data.ExitCode
 								});
 							}
@@ -279,7 +325,7 @@ export class DynamicAnalysis {
 		If all fails, probably not a linux distribution
 	*/
 	private async getOS() {
-		let fromInstruction = this.instructions.find((value, _index, _obj) => value.getInstruction() == "FROM");
+		let fromInstruction = this.dockerfile.getFROMs()[0];
 
 		let os_release = await this.execWithStatusCode(['cat', '/etc/os-release']);
 
@@ -297,7 +343,7 @@ export class DynamicAnalysis {
 			}
 			*/
 
-			let diagMessage: string = "OS Information: \n\n" + os_release.output;
+			let diagMessage: string = "OS Information: \n\n" + os_release.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
 			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
 			this.publishDiagnostics();
@@ -308,7 +354,7 @@ export class DynamicAnalysis {
 
 		if (lsb_release && lsb_release.exitCode == 0) {
 			this.debugLog("Detected OS via", "lsb-release");
-			let diagMessage: string = "OS Information: \n\n" + lsb_release.output;
+			let diagMessage: string = "OS Information: \n\n" + lsb_release.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
 			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
 			this.publishDiagnostics();
@@ -319,7 +365,7 @@ export class DynamicAnalysis {
 
 		if (issue && issue.exitCode == 0) {
 			this.debugLog("Detected OS via", "issue");
-			let diagMessage: string = "OS Information: \n\n" + issue.output;
+			let diagMessage: string = "OS Information: \n\n" + issue.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
 			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
 			this.publishDiagnostics();
@@ -330,7 +376,7 @@ export class DynamicAnalysis {
 
 		if (version && version.exitCode == 0) {
 			this.debugLog("Detected OS via", "version");
-			let diagMessage: string = "OS Information: \n\n" + version.output;
+			let diagMessage: string = "OS Information: \n\n" + version.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
 			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
 			this.publishDiagnostics();
@@ -341,7 +387,7 @@ export class DynamicAnalysis {
 
 		if (uname && uname.exitCode == 0) {
 			this.debugLog("Detected OS via", "uname");
-			let diagMessage: string = "OS Information: \n\n" + uname.output;
+			let diagMessage: string = "OS Information: \n\n" + uname.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
 			this.addDiagnostic(DiagnosticSeverity.Hint, fromInstruction.getArgumentsRange(), diagMessage);
 			this.publishDiagnostics();
@@ -359,8 +405,8 @@ export class DynamicAnalysis {
 		const protocols: string[] = [];
 		const mappedPorts: number[] = [];
 
-		for (let instruction of this.instructions) {
-			if (instruction.getInstruction() == Keyword.EXPOSE) {
+		for (let instruction of this.dockerfile.getInstructions()) {
+			if (instruction.getKeyword() == Keyword.EXPOSE) {
 				instruction.getArguments().map((arg) => {
 					if (arg.getValue().match(/\d+-\d+/)) { //E.g. 3000-3009
 						let rangePorts: number[] = arg.getValue().split("-").map((value) => parseInt(value));

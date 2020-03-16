@@ -366,7 +366,7 @@ export class Validator {
                     if (this.dynamicAnalysis) {
                         this.dynamicAnalysis.destroy();
                     }
-                    this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, problems, instructions, entrypoint, docker_instance);
+                    this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, problems, dockerfile, docker_instance);
                 }
             });
 
