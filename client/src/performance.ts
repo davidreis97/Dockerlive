@@ -95,6 +95,7 @@ export class PerformanceGraphs {
 
 			<style type="text/css">
 				div#cpuDiv, div#memoryDiv, div.networkDiv, div#storageDiv{
+					margin-top: 0.5em;
 					width:100%;
 					height:200px;
 				}
