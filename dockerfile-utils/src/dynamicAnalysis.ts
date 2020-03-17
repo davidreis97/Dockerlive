@@ -12,10 +12,16 @@ import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
-import parsePairs from "parse-pairs";
 const stripAnsi = require('strip-ansi');
 
 export const DEBUG = true;
+
+interface ContainerProcess{
+	pid: number,
+	ppid: number,
+	cmd: string,
+	children?: ContainerProcess[]
+}
 
 interface ExecData {
 	output: Buffer,
@@ -218,15 +224,83 @@ export class DynamicAnalysis {
 		});
 	}
 
-	private async getProcessTree(){
-		//TODO - Implement
+	private async getRunningProcesses() : Promise<ContainerProcess[]>{
+		let processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]); //! - Interesting to keep analysis updating for a while
+		processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
+		processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
+		processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
+		if(processList.exitCode != 0){
+			this.debugLog("Could not get running processes",processList.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+			return null;
+		}
+
+		let processes : ContainerProcess[] = [];
+
+		let psOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '').split("\n").slice(1); //Remove bad characters, split by line and remove header line
+		for(let line of psOutput){
+			if(line == "") continue;
+			let splitLine = line.split(/\s+/);
+			if(splitLine[3] == "ps") continue;
+
+			processes.push({
+				pid: parseInt(splitLine[1]),
+				ppid: parseInt(splitLine[2]),
+				cmd: splitLine.slice(3).join(" ")
+			});
+		}
+
+		//Slightly modified from https://stackoverflow.com/a/40732240/6391820
+		const createDataTree = (dataset : ContainerProcess[]) : ContainerProcess[] => {
+			let hashTable = Object.create(null)
+			dataset.forEach( aData => hashTable[aData.pid] = { ...aData, children : [] } )
+			let dataTree = []
+			dataset.forEach( aData => {
+			  if( aData.ppid ) hashTable[aData.ppid].children.push(hashTable[aData.pid])
+			  else dataTree.push(hashTable[aData.pid]) 
+			} )
+			return dataTree
+		}		
+
+		return createDataTree(processes);
+	}
+
+	private async detectEnvChange(parsedEnvVars, process): Promise<any>{
+		let envVar = await this.execWithStatusCode(["cat",`/proc/${process.pid}/environ`]);
+
+		if(envVar.exitCode != 0){
+			this.log("Could not verify envVars of command",process.cmd,envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+			return null;
+		}
+
+		//Entries on file /proc/${pid}/environ are separated by the null character (0x00). Replacing to newline (0x0A).
+		envVar.output = Buffer.from(envVar.output.map((value, _index, _arr) => value == 0x00 ? 0x0A : value));
+		let sanitized = envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, '').replace(/^\s*\n/gm,'');
+
+		try{
+			let actualEnvVars = parsePairs(sanitized);
+			for(let key of Object.keys(actualEnvVars)){
+				if(parsedEnvVars[key] != null && parsedEnvVars[key].value != actualEnvVars[key]){
+					return {
+						process: process,
+						name: key,
+						expectedValue: parsedEnvVars[key].value,
+						actualValue: actualEnvVars[key],
+						range: parsedEnvVars[key].range
+					};
+				}
+			}
+		}catch(e){
+			this.debugLog("Failed to parse env vars",sanitized);
+			return;
+		}
+		return null;
 	}
 	
 	private async checkEnvVar() {
-		let envVars = this.dockerfile.getENVs();
+		let envVarInsts = this.dockerfile.getENVs();
 		let parsedEnvVars = {}
 
-		for(let envVar of envVars){
+		for(let envVar of envVarInsts){
 			for(let arg of envVar.getArguments()){
 				let splitEnvVar = arg.getValue().split("=");
 				parsedEnvVars[splitEnvVar[0]] = {
@@ -236,34 +310,53 @@ export class DynamicAnalysis {
 			}
 		}
 
-		await this.getProcessTree();
+		let rootProcesses = await this.getRunningProcesses();
+		let maxAnalysedProcesses = 10;
 
-		let entrypointEnvVars = await this.execWithStatusCode(["cat","/proc/1/environ"]); //TODO - Not robust, unable to trace the envVar change back to a command and misses some cases, for example "env VAR=value node index.js"
+		let analyzeTree = async (processes,parentProcess) => {
+			if (processes.length == 0) return;
+			let envChangePromises = [];
 
-		if(entrypointEnvVars.exitCode != 0){
-			this.log("Could not verify envVars at entrypoint",entrypointEnvVars.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
-			return;
-		}
-
-		//Entries on file /proc/${pid}/environ are separated by the null character (0x00). Replacing to newline (0x0A).
-		entrypointEnvVars.output = Buffer.from(entrypointEnvVars.output.map((value, _index, _arr) => value == 0x00 ? 0x0A : value));
-		let sanitized = entrypointEnvVars.output.toString().replace(/[^\x20-\x7E|\n]/g, '').replace(/^\s*\n/gm,'');
-
-		//For each line, surround the value side of the key=value pair with brackets - required by parse-pairs package
-		sanitized = sanitized.split("\n").map((value,_index,_arr) => {
-			if(!value.includes("=")) return "";
-			let splitValue = value.split("=");
-			splitValue[1] = `"${splitValue[1]}"`;
-			return splitValue.join("=");
-		}).join('\n');
-
-		let actualEnvVars = parsePairs(sanitized);
-		for(let key of Object.keys(actualEnvVars)){
-			if(parsedEnvVars[key] != null && parsedEnvVars[key].value != actualEnvVars[key]){
-				this.addDiagnostic(DiagnosticSeverity.Information, parsedEnvVars[key].range, `Environment Variable changed.\nValue at start of execution: ${actualEnvVars[key]}`);
+			for(let process of processes){
+				if(maxAnalysedProcesses > 0){
+					envChangePromises.push(this.detectEnvChange(parsedEnvVars,process));
+					maxAnalysedProcesses--;
+				}else{
+					break;
+				}
 			}
+
+			let detectedEnvChanges = await Promise.all(envChangePromises);
+
+			for(let change of detectedEnvChanges){
+				if(change == null) continue;
+				else{
+					console.log(processes);
+					let msg = `Detected modification to ${change.name}\n` +
+							  `Expected Value: ${change.expectedValue}\n` +
+							  `Actual value: ${change.actualValue}`;
+					if(parentProcess != null){
+						msg += `\nChange occurred after executing: ${parentProcess.cmd}`;
+					}
+					this.addDiagnostic(DiagnosticSeverity.Warning,change.range,msg);
+				}
+			}
+
+			let childrenAnalysisPromises = [];
+
+			for(let [index,process] of processes.entries()){
+				if(maxAnalysedProcesses > 0 && detectedEnvChanges[index] == null){
+					childrenAnalysisPromises.push(analyzeTree(process.children,process));
+				}else{
+					break;
+				}
+			}
+
+			await Promise.all(childrenAnalysisPromises);
 		}
 
+		await analyzeTree(rootProcesses,null);
+		
 		this.publishDiagnostics();
 	}
 
@@ -652,3 +745,12 @@ export class DynamicAnalysis {
 function json_escape(str: string) {
 	return str.replace("\\n", "").replace("\n", "");
 } 
+
+function parsePairs(str){
+	let obj = {};
+	for(let line of str.split('\n')){
+		let splitLine = line.split("=");
+		obj[splitLine[0]] = splitLine.slice(1).join("=");
+	}
+	return obj;
+}
