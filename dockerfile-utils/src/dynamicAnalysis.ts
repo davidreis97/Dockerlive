@@ -585,7 +585,7 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		this.container.inspect((err, data) => {
+		this.container.inspect(async (err, data) => {
 			if (this.isDestroyed) {
 				this.sendProgress(true);
 				return;
@@ -604,9 +604,11 @@ export class DynamicAnalysis {
 
 			let tcpMappedPorts = mappedPorts.filter((_value, index, _array) => protocols[index] == "tcp");
 
+			await new Promise(r => setTimeout(r, 500)); //!- Waits 800ms - arbitrary measure
+
 			this.sendProgress("Running nmap...");
 
-			const nmapCommand = `nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV`;
+			const nmapCommand = `nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV --version-light`;
 
 			this.debugLog("Running: " + nmapCommand);
 
@@ -702,7 +704,7 @@ export class DynamicAnalysis {
 	}
 
 	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L106-L125
-	private calculateStorage(stats) {
+	private calculateStorage(stats) { //! TODO - Test a container which actually uses storage
 		let readBytes = 0;
 		let writeBytes = 0;
 
@@ -710,7 +712,7 @@ export class DynamicAnalysis {
 			readBytes = stats.storage_stats.read_size_bytes || 0;
 			writeBytes = stats.storage_stats.write_size_bytes || 0;
 		} else {
-			for (let entry of stats.io_service_bytes_recursive) {
+			for (let entry of stats.blkio_stats.io_service_bytes_recursive) {
 				if (entry.op == "read") {
 					readBytes += entry.value;
 				} else if (entry.op == "write") {
