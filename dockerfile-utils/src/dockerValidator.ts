@@ -56,9 +56,18 @@ export class Validator {
             this.settings = settings;
         }
 
+        this.initializeDocker();
+    }
+
+    public initializeDocker() {
         this.docker = new Promise(async (res, rej) => {
             const docker: Dockerode = new Dockerode();
-            docker.listContainers({ all: true }, async (_err, containers) => {
+            docker.listContainers({ all: true }, async (err, containers) => {
+                if (err) {
+                    res(null);
+                    return;
+                }
+
                 for (let containerInfo of containers) {
                     if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
                         console.log("REMOVING TEST CONTAINER - " + containerInfo.Names[0]);
@@ -66,7 +75,6 @@ export class Validator {
                     }
                 }
 
-                console.log("DOCKER INITIALIZED");
                 res(docker);
             });
         })
@@ -346,7 +354,7 @@ export class Validator {
 
         let foundError = false;
 
-        for(let problem of problems){
+        for (let problem of problems) {
             if (problem.severity == DiagnosticSeverity.Error) {
                 foundError = true;
                 break;
@@ -354,12 +362,13 @@ export class Validator {
         }
 
         if (!foundError) {
-            let entrypoint: Instruction = instructions[instructions.length - 1];
-            if (entrypoints[0] != null) {
-                entrypoint = entrypoints[0];
-            }
-
             this.docker.then((docker_instance: Dockerode) => {
+                if (!docker_instance) {
+                    console.log("Start Docker to enable dynamic analysis");
+                    this.initializeDocker();
+                    return;
+                }
+
                 if (this.dynamicAnalysis && this.dynamicAnalysis.document.version > document.version) {
                     return [];
                 } else {
@@ -369,7 +378,6 @@ export class Validator {
                     this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, problems, dockerfile, docker_instance);
                 }
             });
-
         }
 
         return problems;
