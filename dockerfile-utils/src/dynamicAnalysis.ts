@@ -13,7 +13,7 @@ import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
 
-export const DEBUG = false;
+export const DEBUG = true;
 
 interface ContainerProcess{
 	pid: number,
@@ -42,7 +42,6 @@ export class DynamicAnalysis {
 	public isDestroyed: boolean = false;
 
 	public readonly performanceUpdateFrequency: number = 100000;
-	public performanceTimeout: NodeJS.Timeout;
 
 	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
 		this.document = document;
@@ -160,7 +159,7 @@ export class DynamicAnalysis {
 			}
 
 			if (err) {
-				this.log("ERROR CREATING CONTAINER", err);
+				this.debugLog("ERROR CREATING CONTAINER", err);
 				this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error creating container - " + err);
 				this.publishDiagnostics();
 				this.sendProgress(true);
@@ -174,7 +173,7 @@ export class DynamicAnalysis {
 					return;
 				}
 				if (err) {
-					this.log("ERROR STARTING CONTAINER", err);
+					this.debugLog("ERROR STARTING CONTAINER", err);
 					this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error starting container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
@@ -194,7 +193,7 @@ export class DynamicAnalysis {
 					return;
 				}
 				if (err) {
-					this.log("ERROR ATTACHING TO CONTAINER", err);
+					this.debugLog("ERROR ATTACHING TO CONTAINER", err);
 					this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error attaching to container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
@@ -209,7 +208,7 @@ export class DynamicAnalysis {
 							return;
 						}
 						if (err) {
-							this.log("ERROR GETTING CONTAINER EXIT CODE", err);
+							this.debugLog("ERROR GETTING CONTAINER EXIT CODE", err);
 							return;
 						}
 						this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
@@ -225,6 +224,9 @@ export class DynamicAnalysis {
 
 	private async getRunningProcesses() : Promise<ContainerProcess[]>{
 		await new Promise(r => setTimeout(r, 800)); //!- Waits 800ms - arbitrary measure
+		if (this.isDestroyed) {
+			return null;
+		}
 		let processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
 		if(processList.exitCode != 0){
 			this.debugLog("Could not get running processes",processList.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
@@ -263,6 +265,10 @@ export class DynamicAnalysis {
 
 	private async detectEnvChange(parsedEnvVars, process): Promise<any>{
 		let envVar = await this.execWithStatusCode(["cat",`/proc/${process.pid}/environ`]);
+
+		if (this.isDestroyed) {
+			return;
+		}
 
 		if(envVar.exitCode != 0){
 			this.debugLog("Could not verify envVars of command",process.cmd,envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
@@ -320,6 +326,11 @@ export class DynamicAnalysis {
 		}
 
 		let rootProcesses = await this.getRunningProcesses();
+
+		if (this.isDestroyed) {
+			return;
+		}
+
 		let maxAnalysedProcesses = 10;
 
 		let analyzeTree = async (processes,parentProcess) => {
@@ -352,6 +363,10 @@ export class DynamicAnalysis {
 
 			let childrenAnalysisPromises = [];
 
+			if (this.isDestroyed) {
+				return;
+			}
+
 			for(let [index,process] of processes.entries()){
 				if(maxAnalysedProcesses > 0 && detectedEnvChanges[index] == null){
 					childrenAnalysisPromises.push(analyzeTree(process.children,process));
@@ -371,8 +386,12 @@ export class DynamicAnalysis {
 	private execWithStatusCode(cmd): Promise<ExecData> {
 		return new Promise((res, _rej) => {
 			this.container.exec({ Cmd: cmd, AttachStdout: true, AttachStderr: true }, (err, exec) => {
+				if (this.isDestroyed) {
+					return;
+				}
+
 				if (err) {
-					this.log("ERROR CREATING EXEC", cmd, err);
+					this.debugLog("ERROR CREATING EXEC", cmd, err);
 					res(null);
 					return;
 				}
@@ -380,8 +399,12 @@ export class DynamicAnalysis {
 				let outputBuffers = [];
 
 				exec.start((err, stream) => {
+					if (this.isDestroyed) {
+						return;
+					}
+
 					if (err) {
-						this.log("ERROR STARTING EXEC", cmd, err);
+						this.debugLog("ERROR STARTING EXEC", cmd, err);
 						res(null);
 						return;
 					}
@@ -390,9 +413,17 @@ export class DynamicAnalysis {
 						outputBuffers.push(data);
 						await new Promise(r => setTimeout(r, 100)); //!- Temporary workaround. See stream.on('end')
 
+						if (this.isDestroyed) {
+							return;
+						}
+
 						exec.inspect((err, data) => {
+							if (this.isDestroyed) {
+								return;
+							}
+
 							if (err) {
-								this.log("ERROR INSPECTING EXEC", cmd, err);
+								this.debugLog("ERROR INSPECTING EXEC", cmd, err);
 								res(null);
 								return;
 							}
@@ -406,7 +437,7 @@ export class DynamicAnalysis {
 						});
 					});
 
-					//! - Not being called, hence the necessity to inspect the exec every time data is received
+					//! - Due to a bug in Dockerode/Docker API, the end event is not being triggered, hence the necessity to inspect the exec every time data is received
 					//! - https://github.com/apocas/dockerode/issues/534
 					stream.on('end', () => {
 						this.debugLog("EXEC END");
@@ -429,6 +460,10 @@ export class DynamicAnalysis {
 		let fromInstruction = this.dockerfile.getFROMs()[0];
 
 		let os_release = await this.execWithStatusCode(['cat', '/etc/os-release']);
+
+		if (this.isDestroyed) {
+			return;
+		}
 
 		if (os_release && os_release.exitCode == 0) {
 			this.debugLog("Detected OS via", "os_release");
@@ -453,6 +488,10 @@ export class DynamicAnalysis {
 
 		let lsb_release = await this.execWithStatusCode(['cat', '/etc/lsb-release']);
 
+		if (this.isDestroyed) {
+			return;
+		}
+
 		if (lsb_release && lsb_release.exitCode == 0) {
 			this.debugLog("Detected OS via", "lsb-release");
 			let diagMessage: string = "OS Information: \n\n" + lsb_release.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
@@ -464,6 +503,10 @@ export class DynamicAnalysis {
 
 		let issue = await this.execWithStatusCode(['cat', '/etc/issue']);
 
+		if (this.isDestroyed) {
+			return;
+		}
+
 		if (issue && issue.exitCode == 0) {
 			this.debugLog("Detected OS via", "issue");
 			let diagMessage: string = "OS Information: \n\n" + issue.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
@@ -474,6 +517,10 @@ export class DynamicAnalysis {
 		}
 
 		let version = await this.execWithStatusCode(['cat', '/proc/version']);
+		
+		if (this.isDestroyed) {
+			return;
+		}
 
 		if (version && version.exitCode == 0) {
 			this.debugLog("Detected OS via", "version");
@@ -485,6 +532,10 @@ export class DynamicAnalysis {
 		}
 
 		let uname = await this.execWithStatusCode(['uname']);
+
+		if (this.isDestroyed) {
+			return;
+		}
 
 		if (uname && uname.exitCode == 0) {
 			this.debugLog("Detected OS via", "uname");
@@ -530,16 +581,22 @@ export class DynamicAnalysis {
 			return;
 		}
 
+		if (this.isDestroyed) {
+			return;
+		}
+
 		this.container.inspect((err, data) => {
-			if (err) {
-				this.log("ERROR INSPECTING CONTAINER", err);
-				this.sendProgress(true);
-				return;
-			}
 			if (this.isDestroyed) {
 				this.sendProgress(true);
 				return;
 			}
+
+			if (err) {
+				this.debugLog("ERROR INSPECTING CONTAINER", err);
+				this.sendProgress(true);
+				return;
+			}
+			
 			const mappings = data.NetworkSettings.Ports;
 			for (let i = 0; i < rangesInFile.length; i++) {
 				mappedPorts.push(parseInt(mappings[ports[i] + "/" + protocols[i]][0].HostPort));
@@ -554,16 +611,20 @@ export class DynamicAnalysis {
 			this.debugLog("Running: " + nmapCommand);
 
 			child_process.exec(nmapCommand, (err: child_process.ExecException, stdout: string, _stderr: string) => {
-				if (err) {
-					this.log("ERROR EXECUTING NMAP", err.message);
-					this.sendProgress(true);
-					return;
-				}
 				if (this.isDestroyed) {
 					this.sendProgress(true);
 					return;
 				}
+				if (err) {
+					this.debugLog("ERROR EXECUTING NMAP", err.message);
+					this.sendProgress(true);
+					return;
+				}
 				xml2js.parseString(stdout, (err: Error, result) => {
+					if (this.isDestroyed) {
+						this.sendProgress(true);
+						return;
+					}
 					if (err) {
 						this.log("ERROR PARSING NMAP OUTPUT XML", err.message);
 						this.sendProgress(true);
@@ -670,17 +731,19 @@ export class DynamicAnalysis {
 		}
 
 		this.container.stats((err, stream) => {
-			if (err) {
-				this.log(err);
-				return;
-			}
-
 			if (this.isDestroyed) {
 				return;
 			}
 
+			if (err) {
+				this.debugLog("ERROR GETTING CONTAINER STATS",err);
+				return;
+			}
+
 			stream.on('data', (data: Buffer) => {
-				//this.log("STATS RECEIVED");
+				if (this.isDestroyed) {
+					return;
+				}
 				let parsedData = JSON.parse(data.toString());
 
 				this.sendPerformanceStats({
@@ -728,11 +791,6 @@ export class DynamicAnalysis {
 			} catch (e) {
 				this.log("Could not remove container - " + e);
 			}
-		}
-
-		if (this.performanceTimeout) {
-			clearInterval(this.performanceTimeout);
-			this.log("Stopped retrieving performance");
 		}
 	}
 
