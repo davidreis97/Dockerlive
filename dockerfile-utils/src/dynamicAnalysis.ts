@@ -1,9 +1,9 @@
 import {
-	TextDocument, Range, Position, Diagnostic, DiagnosticSeverity
+	TextDocument, Range, Diagnostic, DiagnosticSeverity
 } from 'vscode-languageserver-types';
 import { Validator } from './dockerValidator';
 import { ValidationCode } from './main';
-import { Instruction, Keyword, Dockerfile } from 'dockerfile-ast';
+import { Keyword, Dockerfile } from 'dockerfile-ast';
 import Dockerode from 'dockerode';
 import uri2path = require('file-uri-to-path');
 import path = require('path');
@@ -12,9 +12,8 @@ import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
-const stripAnsi = require('strip-ansi');
 
-export const DEBUG = true;
+export const DEBUG = false;
 
 interface ContainerProcess{
 	pid: number,
@@ -225,10 +224,8 @@ export class DynamicAnalysis {
 	}
 
 	private async getRunningProcesses() : Promise<ContainerProcess[]>{
-		let processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]); //! - Interesting to keep analysis updating for a while
-		processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
-		processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
-		processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
+		await new Promise(r => setTimeout(r, 800)); //!- Waits 800ms - arbitrary measure
+		let processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
 		if(processList.exitCode != 0){
 			this.debugLog("Could not get running processes",processList.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
 			return null;
@@ -268,7 +265,7 @@ export class DynamicAnalysis {
 		let envVar = await this.execWithStatusCode(["cat",`/proc/${process.pid}/environ`]);
 
 		if(envVar.exitCode != 0){
-			this.log("Could not verify envVars of command",process.cmd,envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+			this.debugLog("Could not verify envVars of command",process.cmd,envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
 			return null;
 		}
 
@@ -301,12 +298,24 @@ export class DynamicAnalysis {
 		let parsedEnvVars = {}
 
 		for(let envVar of envVarInsts){
-			for(let arg of envVar.getArguments()){
-				let splitEnvVar = arg.getValue().split("=");
-				parsedEnvVars[splitEnvVar[0]] = {
-					value: splitEnvVar[1],
-					range: arg.getRange()
-				}; //TODO - Resolve variables
+			for(let property of envVar.getProperties()){
+				let name = property.getName();
+				let value = property.getValue();
+
+				if(value[0] == "$"){ // value is a variable
+					if(value[1] == "{"){
+						value = value.slice(1, -1); //Remove initial '$' and final '}'
+					}
+					value = value.slice(1); //Remove initial '$' or '{'
+
+					value = this.dockerfile.resolveVariable(value,property.getRange().end.line);
+					if(!value) value = "";
+				}
+
+				parsedEnvVars[name] = {
+					value: value,
+					range: property.getRange()
+				};
 			}
 		}
 
@@ -331,10 +340,9 @@ export class DynamicAnalysis {
 			for(let change of detectedEnvChanges){
 				if(change == null) continue;
 				else{
-					console.log(processes);
-					let msg = `Detected modification to ${change.name}\n` +
-							  `Expected Value: ${change.expectedValue}\n` +
-							  `Actual value: ${change.actualValue}`;
+					let msg = `Detected modification to [${change.name}]\n` +
+							  `Expected: ${change.expectedValue}\n` +
+							  `Actual: ${change.actualValue}`;
 					if(parentProcess != null){
 						msg += `\nChange occurred after executing: ${parentProcess.cmd}`;
 					}
@@ -543,7 +551,7 @@ export class DynamicAnalysis {
 
 			const nmapCommand = `nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV`;
 
-			this.log("Running: " + nmapCommand);
+			this.debugLog("Running: " + nmapCommand);
 
 			child_process.exec(nmapCommand, (err: child_process.ExecException, stdout: string, _stderr: string) => {
 				if (err) {
@@ -678,7 +686,7 @@ export class DynamicAnalysis {
 				this.sendPerformanceStats({
 					running: true,
 					cpu: {
-						percentage: this.calculateCPUPercent(parsedData) //TODO - Double check that this works for unix systems
+						percentage: this.calculateCPUPercent(parsedData)
 					},
 					memory: {
 						usage: parsedData.memory_stats.usage,
@@ -737,7 +745,7 @@ export class DynamicAnalysis {
 		if (DEBUG) {
 			console.log("[" + this.document.version + "] " + msgs.join(": "));
 		} else {
-			console.log(stripAnsi(msgs[msgs.length - 1].toString()));
+			console.log(msgs[msgs.length - 1].toString().replace(/\e\[[0-9;]*m(?:\e\[K)?/g,"")); //Remove ANSI escape sequences
 		}
 	}
 }
