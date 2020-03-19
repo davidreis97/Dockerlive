@@ -1,6 +1,6 @@
 {
-  "name": "dockerfile-language-service",
-  "description": "A language service for Dockerfiles to enable the creation of feature-rich Dockerfile editors.",
+  "name": "dockerfile-language-service-dockerlive",
+  "description": "A language service for Dockerfiles to enable the creation of feature-rich Dockerfile editors. Modified for Dockerlive.",
   "keywords": [
     "language",
     "editor",
@@ -9,13 +9,8 @@
     "moby"
   ],
   "version": "0.0.9",
-  "author": "Remy Suen",
+  "author": "David Reis",
   "license": "MIT",
-  "bugs": "https://github.com/rcjsuen/dockerfile-language-service/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rcjsuen/dockerfile-language-service.git"
-  },
   "engines": {
     "node": "*"
   },

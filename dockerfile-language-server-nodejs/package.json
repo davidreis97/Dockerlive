@@ -1,6 +1,6 @@
 {
-  "name": "dockerfile-language-server-nodejs",
-  "description": "A language server for Dockerfiles powered by NodeJS, TypeScript, and VSCode technologies.",
+  "name": "dockerfile-language-server-nodejs-dockerlive",
+  "description": "A language server for Dockerfiles powered by NodeJS, TypeScript, and VSCode technologies. Modified for Dockerlive.",
   "keywords": [
     "language",
     "server",
@@ -9,13 +9,8 @@
     "moby"
   ],
   "version": "0.0.22",
-  "author": "Remy Suen",
+  "author": "David Reis",
   "license": "MIT",
-  "bugs": "https://github.com/rcjsuen/dockerfile-language-server-nodejs/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rcjsuen/dockerfile-language-server-nodejs.git"
-  },
   "engines": {
     "node": "*"
   },
