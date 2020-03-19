@@ -1,5 +1,6 @@
 trigger:
-- master
+  branches:
+    include: ['publish']
 
 strategy:
   matrix:
