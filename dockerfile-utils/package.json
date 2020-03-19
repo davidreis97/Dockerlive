@@ -18,32 +18,5 @@
   "license": "MIT",
   "engines": {
     "node": "*"
-  },
-  "main": "./lib/main.js",
-  "types": "./lib/main.d.ts",
-  "dependencies": {
-    "@types/tar-fs": "^1.16.2",
-    "dockerfile-ast": "0.0.20",
-    "dockerode": "^3.1.0",
-    "file-uri-to-path": "^2.0.0",
-    "vscode-languageserver-types": "3.6.0"
-  },
-  "devDependencies": {
-    "@types/mocha": "^5.2.0",
-    "@types/node": "^6.14.9",
-    "mocha": "^5.2.0",
-    "nyc": "^15.0.0",
-    "typescript": "^3.7.3"
-  },
-  "bin": {
-    "dockerfile-utils": "./bin/dockerfile-utils"
-  },
-  "scripts": {
-    "build": "tsc -p .",
-    "watch": "tsc --watch -p .",
-    "test": "mocha out/test",
-    "nyc": "nyc mocha out/test",
-    "nyc-ci": "nyc --cache false mocha out/test",
-    "coverage": "nyc report --reporter=text-lcov | coveralls"
   }
 }

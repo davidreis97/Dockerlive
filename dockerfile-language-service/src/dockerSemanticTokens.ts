@@ -21,7 +21,7 @@ export class TokensLegend {
         this.tokenTypes[SemanticTokenTypes.property] = 3;
         this.tokenTypes[SemanticTokenTypes.label] = 4;
         this.tokenTypes[SemanticTokenTypes.class] = 5;
-        this.tokenTypes[SemanticTokenTypes.marco] = 6;
+        this.tokenTypes[SemanticTokenTypes.macro] = 6;
         this.tokenTypes[SemanticTokenTypes.string] = 7;
         this.tokenTypes[SemanticTokenTypes.variable] = 8;
 
@@ -63,7 +63,7 @@ export class DockerSemanticTokens {
 
         for (const directive of dockerfile.getDirectives()) {
             const directiveRange = directive.getRange();
-            tokens = tokens.concat(this.createToken(directiveRange, SemanticTokenTypes.marco));
+            tokens = tokens.concat(this.createToken(directiveRange, SemanticTokenTypes.macro));
             this.currentRange = directiveRange;
         }
 
