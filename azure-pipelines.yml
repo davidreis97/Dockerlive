@@ -17,7 +17,7 @@ steps:
 
 - task: NodeTool@0
   inputs:
-    versionSpec: '8.x'
+    versionSpec: '12.13.x'
   displayName: 'Install Node.js'
 
 - bash: |
@@ -27,12 +27,9 @@ steps:
   condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
 
 - bash: |
-    echo ">>> Compile vscode-test"
-    yarn && yarn compile
-    echo ">>> Compiled vscode-test"
-    cd sample
-    echo ">>> Run sample integration test"
-    yarn && yarn compile && yarn test
-  displayName: Run Tests
+    echo ">>> Compile dockerlive"
+    npm && npm install && npm compile
+    echo ">>> Compiled dockerlive"
+  displayName: Compile
   env:
     DISPLAY: ':99.0'
