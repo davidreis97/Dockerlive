@@ -185,9 +185,26 @@ export class DynamicAnalysis {
 				this.getPerformance();
 				this.getOS();
 				this.checkEnvVar();
+
+				container.wait((err, data) => {
+					this.sendProgress(true);
+					if (this.isDestroyed) {
+						return;
+					}
+					if (err) {
+						this.debugLog("ERROR GETTING CONTAINER EXIT CODE", err);
+						return;
+					}
+					this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
+					if (data.StatusCode != 0) {
+						this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
+						this.publishDiagnostics();
+					}
+					this.destroy();
+				});
 			});
 
-			container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
+			container.attach({stream: true, stdout: true, stderr: true}, (err, stream: Stream) => {
 				if (this.isDestroyed) {
 					this.sendProgress(true);
 					return;
@@ -199,25 +216,7 @@ export class DynamicAnalysis {
 					this.sendProgress(true);
 				}
 				stream.on('data', (data) => {
-					this.log("CONTAINER STDOUT", data);
-				});
-				stream.on('end', (_) => {
-					container.wait((err, data) => {
-						this.sendProgress(true);
-						if (this.isDestroyed) {
-							return;
-						}
-						if (err) {
-							this.debugLog("ERROR GETTING CONTAINER EXIT CODE", err);
-							return;
-						}
-						this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
-						if (data.StatusCode != 0) {
-							this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
-							this.publishDiagnostics();
-						}
-						this.destroy();
-					});
+					this.log(data);
 				});
 			});
 		});
