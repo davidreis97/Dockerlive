@@ -46,7 +46,7 @@
 	"scripts": {
 		"compile": "concurrently \"tsc -p .\" \"tsc -p tsconfig.client.json\" \"tsc -p tsconfig.dockerfile-language-server-nodejs.json\" \"tsc -p tsconfig.dockerfile-language-service.json\" \"tsc -p tsconfig.dockerfile-utils.json\"",
 		"watch": "concurrently \"tsc -w -p .\" \"tsc -w -p tsconfig.client.json\" \"tsc -w -p tsconfig.dockerfile-language-server-nodejs.json\" \"tsc -w -p tsconfig.dockerfile-language-service.json\" \"tsc -w -p tsconfig.dockerfile-utils.json\"",
-		"publish": "vsce publish",
+		"publish": "vsce publish --yarn",
 		"postinstall": "cd client && npm install"
 	},
 	"devDependencies": {
