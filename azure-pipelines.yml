@@ -28,7 +28,7 @@ steps:
 
 - bash: |
     echo ">>> Compile dockerlive"
-    npm && npm install && npm compile
+    npm install && npm run compile
     echo ">>> Compiled dockerlive"
   displayName: Compile
   env:
