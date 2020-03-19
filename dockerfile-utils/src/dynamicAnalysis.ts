@@ -13,7 +13,7 @@ import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
 
-export const DEBUG = true;
+export const DEBUG = false;
 
 interface ContainerProcess{
 	pid: number,
