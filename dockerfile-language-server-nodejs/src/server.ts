@@ -383,6 +383,14 @@ function sendPerformanceStats(stats){
 	connection.sendNotification("dockerlive/performanceStats", stats);
 }
 
+connection.onNotification("dockerlive/stop", () => {
+	service.stopAnalysis();
+});
+
+connection.onNotification("dockerlive/restart", () => {
+	service.restartAnalysis();
+});
+
 interface ValidatorConfiguration {
 	deprecatedMaintainer?: string;
 	directiveCasing?: string;

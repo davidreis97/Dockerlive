@@ -196,3 +196,11 @@ export function validate(document: TextDocument, sendDiagnostics?: Function, sen
     validator.setSettings(settings);
     return validator.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats);
 }
+
+export function stopAnalysis(){
+    validator.stopAnalysis();
+}
+
+export function restartAnalysis(){
+    validator.restartAnalysis();
+}

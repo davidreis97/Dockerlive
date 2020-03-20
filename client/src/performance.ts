@@ -99,9 +99,24 @@ export class PerformanceGraphs {
 					width:100%;
 					height:200px;
 				}
+
+				div#container{
+					display:flex;
+					margin-top:1.5em;
+					margin-bottom: 0.5em;
+				}
+
+				button{
+					margin-left: 1em;
+				}
 			</style>
 			
 			<body>
+				<div id="container">
+					<button onclick="stop();">Stop</button>
+					<button onclick="restartBuild();">Restart</button>
+				</div>
+
 				<div id="cpuDiv">
 					<canvas id="cpu"></canvas>					
 				</div>
@@ -442,6 +457,26 @@ export class PerformanceGraphs {
 								console.error("Unknown color attribute: [" + attribute + "]");
 								break;
 						}
+					}
+
+					const vscode = acquireVsCodeApi();
+
+					function stop(){
+						vscode.postMessage({
+							command: 'stop'
+						});
+					}
+
+					function restartContainer(){
+						vscode.postMessage({
+							command: 'restartContainer'
+						});
+					}
+
+					function restartBuild(){
+						vscode.postMessage({
+							command: 'restartBuild'
+						});
 					}
 				</script>
 			</body>

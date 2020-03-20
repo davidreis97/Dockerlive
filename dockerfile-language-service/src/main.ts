@@ -129,6 +129,10 @@ export interface DockerfileLanguageService {
      */
     computeSemanticTokens(content: string): SemanticTokens;
 
+    stopAnalysis(): void;
+
+    restartAnalysis(): void;
+
     validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, settings?: ValidatorSettings): Diagnostic[];
 
     format(content: string, options: FormattingOptions): TextEdit[];

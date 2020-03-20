@@ -14,21 +14,21 @@ import {
 } from 'vscode-languageclient';
 import { PerformanceGraphs } from './performance';
 
-let client : LanguageClient;
+let client: LanguageClient;
 let currentPanel: vscode.WebviewPanel | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
 	let pGraphs = new PerformanceGraphs();
 
 	initializePerformanceWebview(context, pGraphs);
-	initializeLanguageServer(context).then((_client : LanguageClient) => {
+	initializeLanguageServer(context).then((_client: LanguageClient) => {
 		client = _client;
-		client.onNotification("dockerlive/performanceStats",(data) => {
+		client.onNotification("dockerlive/performanceStats", (data) => {
 			let message = pGraphs.update(data);
 
-			if(!currentPanel){
+			if (!currentPanel) {
 				return; //No need to update graph if the webview panel doesn't exist / isn't visible
-			}else{
+			} else {
 				currentPanel.webview.postMessage(message);
 			}
 		});
@@ -42,7 +42,7 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 				? vscode.window.activeTextEditor.viewColumn + 1
 				: vscode.ViewColumn.Two;
 
-			if(!currentPanel){
+			if (!currentPanel) {
 				// Create and show a new webview
 				currentPanel = vscode.window.createWebviewPanel(
 					'dockerlivePerformance', // Identifies the type of the webview. Used internally
@@ -52,7 +52,7 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 						enableScripts: true
 					} // Webview options.
 				);
-			}else{
+			} else {
 				currentPanel.reveal();
 			}
 
@@ -61,11 +61,26 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 			})
 
 			currentPanel.webview.html = pGraphs.getHTML();
+
+			currentPanel.webview.onDidReceiveMessage(
+				message => {
+					switch (message.command) {
+						case 'stop':
+							client.sendNotification("dockerlive/stop");
+							return;
+						case 'restartBuild':
+							client.sendNotification("dockerlive/restart");
+							return;
+					}
+				},
+				undefined,
+				context.subscriptions
+			);
 		})
 	);
 }
 
-async function initializeLanguageServer(context: vscode.ExtensionContext) : Promise<LanguageClient>{
+async function initializeLanguageServer(context: vscode.ExtensionContext): Promise<LanguageClient> {
 	// The server is implemented in node
 	let serverModule = context.asAbsolutePath(
 		path.join('dockerfile-language-server-nodejs', 'out', 'dockerfile-language-server-nodejs', 'src', 'server.js')
@@ -102,7 +117,7 @@ async function initializeLanguageServer(context: vscode.ExtensionContext) : Prom
 
 	// Start the client. This will also launch the server
 	client.start();
-	
+
 	await client.onReady();
 
 	return client;

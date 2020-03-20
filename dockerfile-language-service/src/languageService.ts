@@ -135,6 +135,14 @@ export class LanguageService implements DockerfileLanguageService {
         return DockerfileUtils.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, settings);
     }
 
+    public stopAnalysis() : void{
+        DockerfileUtils.stopAnalysis();
+    }
+
+    public restartAnalysis() : void{
+        DockerfileUtils.restartAnalysis();
+    }
+
     public format(content: string, options: FormattingOptions): TextEdit[] {
         return DockerfileUtils.format(content, options);
     }

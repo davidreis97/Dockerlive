@@ -36,6 +36,7 @@ export class DynamicAnalysis {
 	public sendProgress: Function;
 	public sendPerformanceStats: Function;
 	public DA_problems: Diagnostic[];
+	public DA_container_processes: Diagnostic;
 	public SA_problems: Diagnostic[];
 	public dockerfile: Dockerfile;
 	public docker: Dockerode;
@@ -63,11 +64,20 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		this.sendDiagnostics(this.document.uri, this.DA_problems.concat(this.SA_problems));
+		let problems = this.DA_problems.concat(this.SA_problems);
+		if(this.DA_container_processes != null){
+			problems.push(this.DA_container_processes);
+		}
+
+		this.sendDiagnostics(this.document.uri, problems);
+	}
+
+	createDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, code?: ValidationCode) : Diagnostic{
+		return Validator.createDockerliveDiagnostic(severity, range, message, code);
 	}
 
 	addDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, code?: ValidationCode) {
-		this.DA_problems.push(Validator.createDockerliveDiagnostic(severity, range, message, code));
+		this.DA_problems.push(this.createDiagnostic(severity, range, message, code));
 	}
 
 	buildContainer() {
@@ -238,6 +248,12 @@ export class DynamicAnalysis {
 		let processes : ContainerProcess[] = [];
 
 		let sanitizedOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
+
+		if(this.dockerfile.getENTRYPOINTs()[0] != null){
+			this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint,this.dockerfile.getENTRYPOINTs()[0].getArgumentsRange(),"Running Processes:\n"+sanitizedOutput);
+
+			this.publishDiagnostics();
+		}
 
 		let psOutput = sanitizedOutput.split("\n").slice(1); //Remove bad characters, split by line and remove header line
 		for(let line of psOutput){
@@ -800,6 +816,11 @@ export class DynamicAnalysis {
 		});
 	}
 
+	restart() : DynamicAnalysis{
+		this.destroy();
+        return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.SA_problems, this.dockerfile, this.docker);
+    }
+
 	destroy() {
 		this.isDestroyed = true;
 
@@ -817,12 +838,8 @@ export class DynamicAnalysis {
 		}
 
 		if (this.container) {
-			try {
-				this.container.remove({ v: true, force: true });
-				this.log("Container Terminated");
-			} catch (e) {
-				this.log("Could not remove container - " + e);
-			}
+			this.container.remove({ v: true, force: true }).catch((_e) => {});
+			this.log("Container Terminated");
 		}
 
 		if (this.checkProcessesInterval){

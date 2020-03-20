@@ -383,6 +383,16 @@ export class Validator {
         return problems;
     }
 
+    restartAnalysis(){
+        if(this.dynamicAnalysis){
+            this.dynamicAnalysis = this.dynamicAnalysis.restart();
+        }
+    }
+
+    stopAnalysis(){
+        this.dynamicAnalysis.destroy();
+    }
+
     private validateInstruction(document: TextDocument, escapeChar: string, instruction: Instruction, keyword: string, isTrigger: boolean, problems: Diagnostic[]): void {
         if (KEYWORDS.indexOf(keyword) === -1) {
             let range = instruction.getInstructionRange();
