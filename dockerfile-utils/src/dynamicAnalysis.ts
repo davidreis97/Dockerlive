@@ -14,6 +14,8 @@ import child_process from 'child_process';
 import xml2js from 'xml2js';
 
 export const DEBUG = false;
+const MAX_ANALYSED_PROCESSES = 10;
+const CHECK_PROCESSES_INTERVAL = 500; //ms
 
 interface ContainerProcess{
 	pid: number,
@@ -39,9 +41,9 @@ export class DynamicAnalysis {
 	public docker: Dockerode;
 	public container: any;
 
-	public isDestroyed: boolean = false;
+	public checkProcessesInterval;
 
-	public readonly performanceUpdateFrequency: number = 100000;
+	public isDestroyed: boolean = false;
 
 	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
 		this.document = document;
@@ -184,7 +186,8 @@ export class DynamicAnalysis {
 				this.runNmap();
 				this.getPerformance();
 				this.getOS();
-				this.checkEnvVar();
+
+				this.checkProcessesInterval = setInterval(this.checkEnvVar.bind(this), CHECK_PROCESSES_INTERVAL);
 
 				container.wait((err, data) => {
 					this.sendProgress(true);
@@ -223,7 +226,6 @@ export class DynamicAnalysis {
 	}
 
 	private async getRunningProcesses() : Promise<ContainerProcess[]>{
-		await new Promise(r => setTimeout(r, 800)); //!- Waits 800ms - arbitrary measure
 		if (this.isDestroyed) {
 			return null;
 		}
@@ -235,7 +237,9 @@ export class DynamicAnalysis {
 
 		let processes : ContainerProcess[] = [];
 
-		let psOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '').split("\n").slice(1); //Remove bad characters, split by line and remove header line
+		let sanitizedOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
+
+		let psOutput = sanitizedOutput.split("\n").slice(1); //Remove bad characters, split by line and remove header line
 		for(let line of psOutput){
 			if(line == "") continue;
 			let splitLine = line.split(/\s+/);
@@ -258,7 +262,7 @@ export class DynamicAnalysis {
 			  else dataTree.push(hashTable[aData.pid]) 
 			} )
 			return dataTree
-		}		
+		}
 
 		return createDataTree(processes);
 	}
@@ -298,6 +302,10 @@ export class DynamicAnalysis {
 		}
 		return null;
 	}
+
+	private hasProblemInRange(range: Range) : boolean{
+		return this.DA_problems.find((problem,_index,_arr) => JSON.stringify(problem.range) == JSON.stringify(range)) != null;
+	}
 	
 	private async checkEnvVar() {
 		let envVarInsts = this.dockerfile.getENVs();
@@ -331,7 +339,9 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		let maxAnalysedProcesses = 10;
+		let maxAnalysedProcesses = MAX_ANALYSED_PROCESSES;
+
+		let addedDiagnostic = false;
 
 		let analyzeTree = async (processes,parentProcess) => {
 			if (processes.length == 0) return;
@@ -357,7 +367,10 @@ export class DynamicAnalysis {
 					if(parentProcess != null){
 						msg += `\nChange occurred after executing: ${parentProcess.cmd}`;
 					}
-					this.addDiagnostic(DiagnosticSeverity.Warning,change.range,msg);
+					if(!this.hasProblemInRange(change.range)){
+						this.addDiagnostic(DiagnosticSeverity.Warning,change.range,msg);
+						addedDiagnostic = true;
+					}
 				}
 			}
 
@@ -380,7 +393,9 @@ export class DynamicAnalysis {
 
 		await analyzeTree(rootProcesses,null);
 		
-		this.publishDiagnostics();
+		if(addedDiagnostic){
+			this.publishDiagnostics();
+		}
 	}
 
 	private execWithStatusCode(cmd): Promise<ExecData> {
@@ -733,12 +748,12 @@ export class DynamicAnalysis {
 			return {
 				readBytes: !isNaN(readBytes) ? readBytes : 0,
 				writeBytes: !isNaN(writeBytes) ? writeBytes : 0
-			}
+			};
 		}catch(e){
 			return {
 				readBytes: 0,
 				writeBytes: 0
-			}
+			};
 		}
 	}
 
@@ -808,6 +823,10 @@ export class DynamicAnalysis {
 			} catch (e) {
 				this.log("Could not remove container - " + e);
 			}
+		}
+
+		if (this.checkProcessesInterval){
+			clearInterval(this.checkProcessesInterval);
 		}
 	}
 
