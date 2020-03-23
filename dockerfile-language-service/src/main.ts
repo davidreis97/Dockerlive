@@ -133,6 +133,8 @@ export interface DockerfileLanguageService {
 
     restartAnalysis(): void;
 
+    currentContainerName(): string;
+
     validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, settings?: ValidatorSettings): Diagnostic[];
 
     format(content: string, options: FormattingOptions): TextEdit[];

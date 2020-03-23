@@ -204,3 +204,7 @@ export function stopAnalysis(){
 export function restartAnalysis(){
     validator.restartAnalysis();
 }
+
+export function currentContainerName() : string{
+    return validator.currentContainerName;
+}

@@ -28,11 +28,26 @@
 			{
 				"command": "dockerlive.showPerformance",
 				"title": "Display Performance of Test Container",
-				"category": "Dockerlive Container Performance",
+				"category": "Dockerlive",
 				"icon": {
 					"light": "./resources/light.svg",
 					"dark": "./resources/dark.svg"
 				}
+			},
+			{
+				"command": "dockerlive.stop",
+				"category": "Dockerlive",
+				"title": "Stop the test container and dynamic analysis"
+			},
+			{
+				"command": "dockerlive.restart",
+				"category": "Dockerlive",
+				"title": "Restart the test container and dynamic analysis"
+			},
+			{
+				"command": "dockerlive.openShell",
+				"category": "Dockerlive",
+				"title": "Open shell inside container"
 			}
 		],
 		"menus": {

@@ -115,6 +115,7 @@ export class PerformanceGraphs {
 				<div id="container">
 					<button onclick="stop();">Stop</button>
 					<button onclick="restartBuild();">Restart</button>
+					<button onclick="openShell();">Open Shell</button>
 				</div>
 
 				<div id="cpuDiv">
@@ -476,6 +477,12 @@ export class PerformanceGraphs {
 					function restartBuild(){
 						vscode.postMessage({
 							command: 'restartBuild'
+						});
+					}
+
+					function openShell(){
+						vscode.postMessage({
+							command: 'openShell'
 						});
 					}
 				</script>

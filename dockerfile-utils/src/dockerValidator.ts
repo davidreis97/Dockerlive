@@ -393,6 +393,12 @@ export class Validator {
         this.dynamicAnalysis.destroy();
     }
 
+    get currentContainerName() : string{
+        if(this.dynamicAnalysis){
+            return this.dynamicAnalysis.containerName
+        }
+    }
+
     private validateInstruction(document: TextDocument, escapeChar: string, instruction: Instruction, keyword: string, isTrigger: boolean, problems: Diagnostic[]): void {
         if (KEYWORDS.indexOf(keyword) === -1) {
             let range = instruction.getInstructionRange();

@@ -143,6 +143,10 @@ export class LanguageService implements DockerfileLanguageService {
         DockerfileUtils.restartAnalysis();
     }
 
+    public currentContainerName() : string{
+        return DockerfileUtils.currentContainerName();
+    }
+
     public format(content: string, options: FormattingOptions): TextEdit[] {
         return DockerfileUtils.format(content, options);
     }

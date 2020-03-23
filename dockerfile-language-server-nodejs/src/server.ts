@@ -391,6 +391,12 @@ connection.onNotification("dockerlive/restart", () => {
 	service.restartAnalysis();
 });
 
+connection.onNotification("dockerlive/getContainerName", () => {
+	connection.sendNotification("dockerlive/containerName", {
+		containerName: service.currentContainerName()
+	});
+});
+
 interface ValidatorConfiguration {
 	deprecatedMaintainer?: string;
 	directiveCasing?: string;

@@ -20,6 +20,18 @@ let currentPanel: vscode.WebviewPanel | undefined;
 export async function activate(context: vscode.ExtensionContext) {
 	let pGraphs = new PerformanceGraphs();
 
+	vscode.commands.registerCommand('dockerlive.stop', () => {
+		client.sendNotification("dockerlive/stop");
+	});
+
+	vscode.commands.registerCommand('dockerlive.restart', () => {
+		client.sendNotification("dockerlive/restart");
+	});
+
+	vscode.commands.registerCommand('dockerlive.openShell', () => {
+		client.sendNotification("dockerlive/getContainerName");
+	});
+
 	initializePerformanceWebview(context, pGraphs);
 	initializeLanguageServer(context).then((_client: LanguageClient) => {
 		client = _client;
@@ -31,6 +43,21 @@ export async function activate(context: vscode.ExtensionContext) {
 			} else {
 				currentPanel.webview.postMessage(message);
 			}
+		});
+
+		client.onNotification("dockerlive/containerName", (data) => {
+			vscode.window.showInputBox({
+				prompt: "Command to be executed",
+				value: `docker exec -it ${data.containerName} /bin/bash`
+			}).then((command: string) => {
+				if (!command){
+					return;
+				}
+
+				const terminal = vscode.window.createTerminal("Dockerlive Container");
+				terminal.sendText(command);
+				terminal.show();
+			})
 		});
 	});
 }
@@ -66,10 +93,13 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 				message => {
 					switch (message.command) {
 						case 'stop':
-							client.sendNotification("dockerlive/stop");
+							vscode.commands.executeCommand("dockerlive.stop");
 							return;
 						case 'restartBuild':
-							client.sendNotification("dockerlive/restart");
+							vscode.commands.executeCommand("dockerlive.restart");
+							return;
+						case 'openShell':
+							vscode.commands.executeCommand("dockerlive.openShell");
 							return;
 					}
 				},
@@ -127,5 +157,6 @@ export function deactivate(): Thenable<void> | undefined { //TODO - Check extens
 	if (!client) {
 		return undefined;
 	}
+	client.sendNotification("dockerlive/stop");
 	return client.stop();
 }

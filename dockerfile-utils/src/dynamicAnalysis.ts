@@ -46,6 +46,10 @@ export class DynamicAnalysis {
 
 	public isDestroyed: boolean = false;
 
+	get containerName() : string{
+		return 'testcontainer' + this.document.version;
+	}
+
 	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
 		this.document = document;
 		this.sendDiagnostics = sendDiagnostics;
@@ -162,7 +166,7 @@ export class DynamicAnalysis {
 
 	runContainer() {
 		this.sendProgress("Creating container...");
-		this.docker.createContainer({ Image: 'testimage', Tty: true, name: 'testcontainer' + this.document.version, HostConfig: { PublishAllPorts: true } }, (err, container) => {
+		this.docker.createContainer({ Image: 'testimage', Tty: true, name: this.containerName, HostConfig: { PublishAllPorts: true } }, (err, container) => {
 			this.container = container;
 
 			if (this.isDestroyed) {
