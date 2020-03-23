@@ -3,7 +3,7 @@ import {
 } from 'vscode-languageserver-types';
 import { Validator } from './dockerValidator';
 import { ValidationCode } from './main';
-import { Keyword, Dockerfile } from 'dockerfile-ast';
+import { Keyword, Dockerfile, Instruction } from 'dockerfile-ast';
 import Dockerode from 'dockerode';
 import uri2path = require('file-uri-to-path');
 import path = require('path');
@@ -41,6 +41,7 @@ export class DynamicAnalysis {
 	public dockerfile: Dockerfile;
 	public docker: Dockerode;
 	public container: any;
+	public entrypointInstruction : Instruction;
 
 	public checkProcessesInterval;
 
@@ -59,6 +60,14 @@ export class DynamicAnalysis {
 		this.SA_problems = SA_problems;
 		this.dockerfile = dockerfile;
 		this.docker = docker;
+
+		if(this.dockerfile.getENTRYPOINTs()[0] != null){
+			this.entrypointInstruction = this.dockerfile.getENTRYPOINTs()[0];
+		}else if(this.dockerfile.getCMDs()[0] != null){
+			this.entrypointInstruction = this.dockerfile.getCMDs()[0];
+		}else{
+			this.entrypointInstruction = this.dockerfile.getInstructions()[this.dockerfile.getInstructions().length - 1];
+		}
 
 		this.clearPreviousContainers().then((success) => { if (success) this.buildContainer() });
 	}
@@ -200,7 +209,7 @@ export class DynamicAnalysis {
 
 			if (err) {
 				this.debugLog("ERROR CREATING CONTAINER", err);
-				this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error creating container - " + err);
+				this.addDiagnostic(DiagnosticSeverity.Error, this.entrypointInstruction.getRange(), "Error creating container - " + err);
 				this.publishDiagnostics();
 				this.sendProgress(true);
 				return;
@@ -214,7 +223,7 @@ export class DynamicAnalysis {
 				}
 				if (err) {
 					this.debugLog("ERROR STARTING CONTAINER", err);
-					this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error starting container - " + err);
+					this.addDiagnostic(DiagnosticSeverity.Error, this.entrypointInstruction.getRange(), "Error starting container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
 					return;
@@ -238,7 +247,7 @@ export class DynamicAnalysis {
 					}
 					this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
 					if (data.StatusCode != 0) {
-						this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
+						this.addDiagnostic(DiagnosticSeverity.Error, this.entrypointInstruction.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
 						this.publishDiagnostics();
 					}
 					this.destroy();
@@ -252,7 +261,7 @@ export class DynamicAnalysis {
 				}
 				if (err) {
 					this.debugLog("ERROR ATTACHING TO CONTAINER", err);
-					this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getENTRYPOINTs()[0].getRange(), "Error attaching to container - " + err);
+					this.addDiagnostic(DiagnosticSeverity.Error, this.entrypointInstruction.getRange(), "Error attaching to container - " + err);
 					this.publishDiagnostics();
 					this.sendProgress(true);
 				}
@@ -277,11 +286,9 @@ export class DynamicAnalysis {
 
 		let sanitizedOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
-		if (this.dockerfile.getENTRYPOINTs()[0] != null) {
-			this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint, this.dockerfile.getENTRYPOINTs()[0].getArgumentsRange(), "Running Processes:\n" + sanitizedOutput);
+		this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint, this.entrypointInstruction.getArgumentsRange(), "Running Processes:\n" + sanitizedOutput);
 
-			this.publishDiagnostics();
-		}
+		this.publishDiagnostics();
 
 		let psOutput = sanitizedOutput.split("\n").slice(1); //Remove bad characters, split by line and remove header line
 		for (let line of psOutput) {
@@ -861,7 +868,7 @@ export class DynamicAnalysis {
 				this.buildStream.destroy();
 				this.debugLog("Build Stream Terminated");
 			} catch (e) {
-				this.log("Could not destroy build stream - " + e);
+				this.debugLog("Could not destroy build stream - " + e);
 			}
 		}
 
