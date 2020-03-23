@@ -48,7 +48,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.onNotification("dockerlive/containerName", (data) => {
 			vscode.window.showInputBox({
 				prompt: "Command to be executed",
-				value: `docker exec -it ${data.containerName} /bin/bash`
+				value: `docker exec -it ${data.containerName} /bin/sh`
 			}).then((command: string) => {
 				if (!command){
 					return;
