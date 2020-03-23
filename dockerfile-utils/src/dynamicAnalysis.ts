@@ -17,7 +17,7 @@ export const DEBUG = false;
 const MAX_ANALYSED_PROCESSES = 10;
 const CHECK_PROCESSES_INTERVAL = 500; //ms
 
-interface ContainerProcess{
+interface ContainerProcess {
 	pid: number,
 	ppid: number,
 	cmd: string,
@@ -46,7 +46,7 @@ export class DynamicAnalysis {
 
 	public isDestroyed: boolean = false;
 
-	get containerName() : string{
+	get containerName(): string {
 		return 'testcontainer' + this.document.version;
 	}
 
@@ -60,7 +60,31 @@ export class DynamicAnalysis {
 		this.dockerfile = dockerfile;
 		this.docker = docker;
 
-		this.buildContainer();
+		this.clearPreviousContainers().then((success) => { if (success) this.buildContainer() });
+	}
+
+	async clearPreviousContainers(): Promise<boolean> {
+		return new Promise(async (res, _rej) => {
+			this.docker.listContainers({ all: true }, async (err, containers) => {
+				if (err) {
+					this.log("Start Docker to enable dynamic analysis");
+					res(false);
+					return;
+				}
+
+				let removalPromises = [];
+
+				for (let containerInfo of containers) {
+					if (containerInfo.Names[0].match(/\/testcontainer.*/)) {
+						removalPromises.push(this.docker.getContainer(containerInfo.Id).remove({ v: true, force: true }).catch((_e) => { }));
+					}
+				}
+
+				await Promise.all(removalPromises);
+
+				res(true);
+			});
+		})
 	}
 
 	publishDiagnostics() {
@@ -69,14 +93,14 @@ export class DynamicAnalysis {
 		}
 
 		let problems = this.DA_problems.concat(this.SA_problems);
-		if(this.DA_container_processes != null){
+		if (this.DA_container_processes != null) {
 			problems.push(this.DA_container_processes);
 		}
 
 		this.sendDiagnostics(this.document.uri, problems);
 	}
 
-	createDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, code?: ValidationCode) : Diagnostic{
+	createDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, code?: ValidationCode): Diagnostic {
 		return Validator.createDockerliveDiagnostic(severity, range, message, code);
 	}
 
@@ -221,7 +245,7 @@ export class DynamicAnalysis {
 				});
 			});
 
-			container.attach({stream: true, stdout: true, stderr: true}, (err, stream: Stream) => {
+			container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
 				if (this.isDestroyed) {
 					this.sendProgress(true);
 					return;
@@ -239,31 +263,31 @@ export class DynamicAnalysis {
 		});
 	}
 
-	private async getRunningProcesses() : Promise<ContainerProcess[]>{
+	private async getRunningProcesses(): Promise<ContainerProcess[]> {
 		if (this.isDestroyed) {
 			return null;
 		}
-		let processList = await this.execWithStatusCode(["ps","-eo","pid,ppid,args"]);
-		if(processList.exitCode != 0){
-			this.debugLog("Could not get running processes",processList.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+		let processList = await this.execWithStatusCode(["ps", "-eo", "pid,ppid,args"]);
+		if (processList.exitCode != 0) {
+			this.debugLog("Could not get running processes", processList.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
 			return null;
 		}
 
-		let processes : ContainerProcess[] = [];
+		let processes: ContainerProcess[] = [];
 
 		let sanitizedOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
-		if(this.dockerfile.getENTRYPOINTs()[0] != null){
-			this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint,this.dockerfile.getENTRYPOINTs()[0].getArgumentsRange(),"Running Processes:\n"+sanitizedOutput);
+		if (this.dockerfile.getENTRYPOINTs()[0] != null) {
+			this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint, this.dockerfile.getENTRYPOINTs()[0].getArgumentsRange(), "Running Processes:\n" + sanitizedOutput);
 
 			this.publishDiagnostics();
 		}
 
 		let psOutput = sanitizedOutput.split("\n").slice(1); //Remove bad characters, split by line and remove header line
-		for(let line of psOutput){
-			if(line == "") continue;
+		for (let line of psOutput) {
+			if (line == "") continue;
 			let splitLine = line.split(/\s+/);
-			if(splitLine[3] == "ps") continue;
+			if (splitLine[3] == "ps") continue;
 
 			processes.push({
 				pid: parseInt(splitLine[1]),
@@ -273,40 +297,40 @@ export class DynamicAnalysis {
 		}
 
 		//Slightly modified from https://stackoverflow.com/a/40732240/6391820
-		const createDataTree = (dataset : ContainerProcess[]) : ContainerProcess[] => {
+		const createDataTree = (dataset: ContainerProcess[]): ContainerProcess[] => {
 			let hashTable = Object.create(null)
-			dataset.forEach( aData => hashTable[aData.pid] = { ...aData, children : [] } )
+			dataset.forEach(aData => hashTable[aData.pid] = { ...aData, children: [] })
 			let dataTree = []
-			dataset.forEach( aData => {
-			  if( aData.ppid ) hashTable[aData.ppid].children.push(hashTable[aData.pid])
-			  else dataTree.push(hashTable[aData.pid]) 
-			} )
+			dataset.forEach(aData => {
+				if (aData.ppid) hashTable[aData.ppid].children.push(hashTable[aData.pid])
+				else dataTree.push(hashTable[aData.pid])
+			})
 			return dataTree
 		}
 
 		return createDataTree(processes);
 	}
 
-	private async detectEnvChange(parsedEnvVars, process): Promise<any>{
-		let envVar = await this.execWithStatusCode(["cat",`/proc/${process.pid}/environ`]);
+	private async detectEnvChange(parsedEnvVars, process): Promise<any> {
+		let envVar = await this.execWithStatusCode(["cat", `/proc/${process.pid}/environ`]);
 
 		if (this.isDestroyed) {
 			return;
 		}
 
-		if(envVar.exitCode != 0){
-			this.debugLog("Could not verify envVars of command",process.cmd,envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+		if (envVar.exitCode != 0) {
+			this.debugLog("Could not verify envVars of command", process.cmd, envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
 			return null;
 		}
 
 		//Entries on file /proc/${pid}/environ are separated by the null character (0x00). Replacing to newline (0x0A).
 		envVar.output = Buffer.from(envVar.output.map((value, _index, _arr) => value == 0x00 ? 0x0A : value));
-		let sanitized = envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, '').replace(/^\s*\n/gm,'');
+		let sanitized = envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, '').replace(/^\s*\n/gm, '');
 
-		try{
+		try {
 			let actualEnvVars = parsePairs(sanitized);
-			for(let key of Object.keys(actualEnvVars)){
-				if(parsedEnvVars[key] != null && parsedEnvVars[key].value != actualEnvVars[key]){
+			for (let key of Object.keys(actualEnvVars)) {
+				if (parsedEnvVars[key] != null && parsedEnvVars[key].value != actualEnvVars[key]) {
 					return {
 						process: process,
 						name: key,
@@ -316,34 +340,34 @@ export class DynamicAnalysis {
 					};
 				}
 			}
-		}catch(e){
-			this.debugLog("Failed to parse env vars",sanitized);
+		} catch (e) {
+			this.debugLog("Failed to parse env vars", sanitized);
 			return;
 		}
 		return null;
 	}
 
-	private hasProblemInRange(range: Range) : boolean{
-		return this.DA_problems.find((problem,_index,_arr) => JSON.stringify(problem.range) == JSON.stringify(range)) != null;
+	private hasProblemInRange(range: Range): boolean {
+		return this.DA_problems.find((problem, _index, _arr) => JSON.stringify(problem.range) == JSON.stringify(range)) != null;
 	}
-	
+
 	private async checkEnvVar() {
 		let envVarInsts = this.dockerfile.getENVs();
 		let parsedEnvVars = {}
 
-		for(let envVar of envVarInsts){
-			for(let property of envVar.getProperties()){
+		for (let envVar of envVarInsts) {
+			for (let property of envVar.getProperties()) {
 				let name = property.getName();
 				let value = property.getValue();
 
-				if(value[0] == "$"){ // value is a variable
-					if(value[1] == "{"){
+				if (value[0] == "$") { // value is a variable
+					if (value[1] == "{") {
 						value = value.slice(1, -1); //Remove initial '$' and final '}'
 					}
 					value = value.slice(1); //Remove initial '$' or '{'
 
-					value = this.dockerfile.resolveVariable(value,property.getRange().end.line);
-					if(!value) value = "";
+					value = this.dockerfile.resolveVariable(value, property.getRange().end.line);
+					if (!value) value = "";
 				}
 
 				parsedEnvVars[name] = {
@@ -363,32 +387,32 @@ export class DynamicAnalysis {
 
 		let addedDiagnostic = false;
 
-		let analyzeTree = async (processes,parentProcess) => {
+		let analyzeTree = async (processes, parentProcess) => {
 			if (processes.length == 0) return;
 			let envChangePromises = [];
 
-			for(let process of processes){
-				if(maxAnalysedProcesses > 0){
-					envChangePromises.push(this.detectEnvChange(parsedEnvVars,process));
+			for (let process of processes) {
+				if (maxAnalysedProcesses > 0) {
+					envChangePromises.push(this.detectEnvChange(parsedEnvVars, process));
 					maxAnalysedProcesses--;
-				}else{
+				} else {
 					break;
 				}
 			}
 
 			let detectedEnvChanges = await Promise.all(envChangePromises);
 
-			for(let change of detectedEnvChanges){
-				if(change == null) continue;
-				else{
+			for (let change of detectedEnvChanges) {
+				if (change == null) continue;
+				else {
 					let msg = `Detected modification to [${change.name}]\n` +
-							  `Expected: ${change.expectedValue}\n` +
-							  `Actual: ${change.actualValue}`;
-					if(parentProcess != null){
+						`Expected: ${change.expectedValue}\n` +
+						`Actual: ${change.actualValue}`;
+					if (parentProcess != null) {
 						msg += `\nChange occurred after executing: ${parentProcess.cmd}`;
 					}
-					if(!this.hasProblemInRange(change.range)){
-						this.addDiagnostic(DiagnosticSeverity.Warning,change.range,msg);
+					if (!this.hasProblemInRange(change.range)) {
+						this.addDiagnostic(DiagnosticSeverity.Warning, change.range, msg);
 						addedDiagnostic = true;
 					}
 				}
@@ -400,10 +424,10 @@ export class DynamicAnalysis {
 				return;
 			}
 
-			for(let [index,process] of processes.entries()){
-				if(maxAnalysedProcesses > 0 && detectedEnvChanges[index] == null){
-					childrenAnalysisPromises.push(analyzeTree(process.children,process));
-				}else{
+			for (let [index, process] of processes.entries()) {
+				if (maxAnalysedProcesses > 0 && detectedEnvChanges[index] == null) {
+					childrenAnalysisPromises.push(analyzeTree(process.children, process));
+				} else {
 					break;
 				}
 			}
@@ -411,9 +435,9 @@ export class DynamicAnalysis {
 			await Promise.all(childrenAnalysisPromises);
 		}
 
-		await analyzeTree(rootProcesses,null);
-		
-		if(addedDiagnostic){
+		await analyzeTree(rootProcesses, null);
+
+		if (addedDiagnostic) {
 			this.publishDiagnostics();
 		}
 	}
@@ -552,7 +576,7 @@ export class DynamicAnalysis {
 		}
 
 		let version = await this.execWithStatusCode(['cat', '/proc/version']);
-		
+
 		if (this.isDestroyed) {
 			return;
 		}
@@ -631,7 +655,7 @@ export class DynamicAnalysis {
 				this.sendProgress(true);
 				return;
 			}
-			
+
 			const mappings = data.NetworkSettings.Ports;
 			for (let i = 0; i < rangesInFile.length; i++) {
 				mappedPorts.push(parseInt(mappings[ports[i] + "/" + protocols[i]][0].HostPort));
@@ -712,7 +736,7 @@ export class DynamicAnalysis {
 
 	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L175-L188
 	private calculateCPUPercent(stats) {
-		try{
+		try {
 			let cpuPercent = 0;
 			let cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
 			let systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
@@ -723,7 +747,7 @@ export class DynamicAnalysis {
 			}
 
 			return !isNaN(cpuPercent) ? cpuPercent : 0;
-		}catch(e){
+		} catch (e) {
 			return 0;
 		}
 	}
@@ -732,18 +756,18 @@ export class DynamicAnalysis {
 		let rawNetworks = stats.networks;
 		let finalNetworks = {};
 
-		try{
+		try {
 			for (let key of Object.keys(rawNetworks)) {
 				finalNetworks[key] = {
 					input: rawNetworks[key].rx_bytes,
 					output: rawNetworks[key].tx_bytes
 				};
 			}
-	
+
 			return finalNetworks;
-		}catch(e){
+		} catch (e) {
 			return {};
-		}	
+		}
 	}
 
 	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L106-L125
@@ -751,7 +775,7 @@ export class DynamicAnalysis {
 		let readBytes = 0;
 		let writeBytes = 0;
 
-		try{
+		try {
 			if (process.platform === "win32") {
 				readBytes = stats.storage_stats.read_size_bytes || 0;
 				writeBytes = stats.storage_stats.write_size_bytes || 0;
@@ -769,7 +793,7 @@ export class DynamicAnalysis {
 				readBytes: !isNaN(readBytes) ? readBytes : 0,
 				writeBytes: !isNaN(writeBytes) ? writeBytes : 0
 			};
-		}catch(e){
+		} catch (e) {
 			return {
 				readBytes: 0,
 				writeBytes: 0
@@ -788,7 +812,7 @@ export class DynamicAnalysis {
 			}
 
 			if (err) {
-				this.debugLog("ERROR GETTING CONTAINER STATS",err);
+				this.debugLog("ERROR GETTING CONTAINER STATS", err);
 				return;
 			}
 
@@ -820,33 +844,33 @@ export class DynamicAnalysis {
 		});
 	}
 
-	restart() : DynamicAnalysis{
+	restart(): DynamicAnalysis {
 		this.destroy();
-        return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.SA_problems, this.dockerfile, this.docker);
-    }
+		return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.SA_problems, this.dockerfile, this.docker);
+	}
 
 	destroy() {
 		this.isDestroyed = true;
 
-		this.log("Destroying Analysis");
+		this.debugLog("Destroying Analysis");
 
 		this.sendProgress(true);
 
 		if (this.buildStream) {
 			try {
 				this.buildStream.destroy();
-				this.log("Build Stream Terminated");
+				this.debugLog("Build Stream Terminated");
 			} catch (e) {
 				this.log("Could not destroy build stream - " + e);
 			}
 		}
 
 		if (this.container) {
-			this.container.remove({ v: true, force: true }).catch((_e) => {});
-			this.log("Container Terminated");
+			this.container.remove({ v: true, force: true }).catch((_e) => { });
+			this.debugLog("Container Terminated");
 		}
 
-		if (this.checkProcessesInterval){
+		if (this.checkProcessesInterval) {
 			clearInterval(this.checkProcessesInterval);
 		}
 	}
@@ -860,18 +884,18 @@ export class DynamicAnalysis {
 		if (DEBUG) {
 			console.log("[" + this.document.version + "] " + msgs.join(": "));
 		} else {
-			console.log(msgs[msgs.length - 1].toString().replace(/\e\[[0-9;]*m(?:\e\[K)?/g,"")); //Remove ANSI escape sequences
+			console.log(msgs[msgs.length - 1].toString().replace(/\e\[[0-9;]*m(?:\e\[K)?/g, "")); //Remove ANSI escape sequences
 		}
 	}
 }
 
 function json_escape(str: string) {
 	return str.replace("\\n", "").replace("\n", "");
-} 
+}
 
-function parsePairs(str){
+function parsePairs(str) {
 	let obj = {};
-	for(let line of str.split('\n')){
+	for (let line of str.split('\n')) {
 		let splitLine = line.split("=");
 		obj[splitLine[0]] = splitLine.slice(1).join("=");
 	}
