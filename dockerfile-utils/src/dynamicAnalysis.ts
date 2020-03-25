@@ -159,6 +159,8 @@ export class DynamicAnalysis {
 		this.docker.buildImage(tardir, { t: "testimage", dockerfile: tmpFileName, openStdin: true }, (error: string, stream: Duplex) => {
 			this.buildStream = stream;
 			let currentStep: number = 1;
+			let timestamp = Date.now();
+			let intermediateImagesIDs = new Array(this.dockerfile.getInstructions().length);
 
 			if (error) {
 				this.log(error);
@@ -193,16 +195,33 @@ export class DynamicAnalysis {
 									currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
 									//const totalSteps = parseInt(tokenizedData[1].match(/\d+/)[0]);
 
+									if(currentStep > 1){
+										const previousInstructionRange = this.dockerfile.getInstructions()[currentStep-2].getRange();
+										const currentTimeMs = Date.now();
+										const timeDiference = (currentTimeMs - timestamp)/1000;
+										this.addCodeLens(previousInstructionRange,`${timeDiference.toFixed(3)}s`);
+										timestamp = currentTimeMs;
+										this.publishCodeLenses();
+									}
+
 									this.sendProgress(parsedData["stream"]);
 								} catch (e) {
 									this.log("Something went wrong parsing Docker build steps...");
 								}
+							}else if(parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g)){
+								intermediateImagesIDs[currentStep] = parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g);
 							}
 
 							if (parsedData["stream"].match("Successfully built")) {
 								this.DA_problems = [];
 								this.publishDiagnostics();
 								this.runContainer();
+								const lastInstructionRange = this.dockerfile.getInstructions()[this.dockerfile.getInstructions().length-1].getRange();
+								const currentTimeMs = Date.now();
+								const timeDiference = (currentTimeMs - timestamp)/1000;
+								this.addCodeLens(lastInstructionRange,`${timeDiference.toFixed(3)}s`);
+								this.publishCodeLenses();
+								this.getImageHistory();
 							}
 						} else if (parsedData["status"]) {
 							this.log("Status", parsedData["status"]);
@@ -221,6 +240,21 @@ export class DynamicAnalysis {
 				}
 			});
 		});
+	}
+
+
+	getImageHistory() {
+		this.docker.getImage("testimage").history((err,data)=>{
+			if (this.isDestroyed) {
+				return;
+			}
+
+			if (err) {
+				this.debugLog("Error getting image history", err);
+			}
+
+			console.log(data);
+		});	
 	}
 
 	runContainer() {
@@ -271,7 +305,7 @@ export class DynamicAnalysis {
 						this.debugLog("ERROR GETTING CONTAINER EXIT CODE", err);
 						return;
 					}
-					this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
+					//this.log("CONTAINER CLOSED WITH CODE", data.StatusCode);
 					if (data.StatusCode != 0) {
 						this.addDiagnostic(DiagnosticSeverity.Error, this.entrypointInstruction.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
 						this.publishDiagnostics();
@@ -421,7 +455,7 @@ export class DynamicAnalysis {
 		let addedDiagnostic = false;
 
 		let analyzeTree = async (processes, parentProcess) => {
-			if (processes.length == 0) return;
+			if (!processes || processes.length == 0) return;
 			let envChangePromises = [];
 
 			for (let process of processes) {
