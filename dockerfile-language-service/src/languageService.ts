@@ -4,7 +4,7 @@
  * ------------------------------------------------------------------------------------------ */
 import { DockerfileLanguageService, ILogger, Capabilities } from "./main";
 import {
-    TextDocument, Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, WorkspaceEdit, Location, DocumentHighlight, SymbolInformation, SignatureHelp, DocumentLink, TextEdit, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange
+    TextDocument, Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, WorkspaceEdit, Location, DocumentHighlight, SymbolInformation, SignatureHelp, DocumentLink, TextEdit, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange, CodeLens
 } from "vscode-languageserver-types";
 import * as DockerfileUtils from '../../dockerfile-utils/src/main';
 import { DockerAssist } from "./dockerAssist";
@@ -131,8 +131,8 @@ export class LanguageService implements DockerfileLanguageService {
         return dockerSemanticTokens.computeSemanticTokens(content);
     }
 
-    public validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, settings?: DockerfileUtils.ValidatorSettings): Diagnostic[] {
-        return DockerfileUtils.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, settings);
+    public validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function, settings?: DockerfileUtils.ValidatorSettings): Diagnostic[] {
+        return DockerfileUtils.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendCodeLenses, settings);
     }
 
     public stopAnalysis() : void{

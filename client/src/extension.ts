@@ -32,6 +32,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.sendNotification("dockerlive/getContainerName");
 	});
 
+	let codeLensProvider = new DockerfileCodeLensProvider();
+
 	initializePerformanceWebview(context, pGraphs);
 	initializeLanguageServer(context).then((_client: LanguageClient) => {
 		client = _client;
@@ -50,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				prompt: "Command to be executed",
 				value: `docker exec -it ${data.containerName} /bin/sh`
 			}).then((command: string) => {
-				if (!command){
+				if (!command) {
 					return;
 				}
 
@@ -59,6 +61,10 @@ export async function activate(context: vscode.ExtensionContext) {
 				terminal.show();
 			})
 		});
+
+		client.onNotification("dockerlive/didChangeCodeLenses", (data) => {
+			codeLensProvider.didChangeCodeLenses(data.codeLenses);
+		})
 	});
 }
 
@@ -159,4 +165,33 @@ export function deactivate(): Thenable<void> | undefined { //TODO - Check extens
 	}
 	client.sendNotification("dockerlive/stop");
 	return client.stop();
+}
+
+//	Necessary workaround in order to change the text of an existing CodeLens
+//	since the event onDidChangeCodeLenses is not yet supported in the LSP
+//	See: https://github.com/microsoft/language-server-protocol/issues/192
+class DockerfileCodeLensProvider implements vscode.CodeLensProvider {
+	private _onDidChangeCodeLenses: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+    public readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
+
+	private codeLenses: vscode.CodeLens[] = [];
+
+	constructor(){
+		vscode.languages.registerCodeLensProvider({
+			scheme: 'file', language: 'dockerfile'
+		},this);
+	}
+
+	didChangeCodeLenses(codeLenses: vscode.CodeLens[]){
+		this.codeLenses = codeLenses;
+		this._onDidChangeCodeLenses.fire();
+	}
+
+	provideCodeLenses(_document: vscode.TextDocument): vscode.CodeLens[] {
+		return this.codeLenses;
+	}
+
+	resolveCodeLens(codeLens: vscode.CodeLens): vscode.CodeLens{
+		return codeLens;
+	}
 }

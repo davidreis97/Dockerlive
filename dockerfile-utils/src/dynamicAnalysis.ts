@@ -1,5 +1,5 @@
 import {
-	TextDocument, Range, Diagnostic, DiagnosticSeverity
+	TextDocument, Range, Diagnostic, DiagnosticSeverity, CodeLens
 } from 'vscode-languageserver-types';
 import { Validator } from './dockerValidator';
 import { ValidationCode } from './main';
@@ -35,6 +35,7 @@ export class DynamicAnalysis {
 	public sendDiagnostics: Function;
 	public sendProgress: Function;
 	public sendPerformanceStats: Function;
+	public sendCodeLenses: Function;
 	public DA_problems: Diagnostic[];
 	public DA_container_processes: Diagnostic;
 	public SA_problems: Diagnostic[];
@@ -42,6 +43,7 @@ export class DynamicAnalysis {
 	public docker: Dockerode;
 	public container: any;
 	public entrypointInstruction : Instruction;
+	public codeLenses: CodeLens[];
 
 	public checkProcessesInterval;
 
@@ -51,15 +53,17 @@ export class DynamicAnalysis {
 		return 'testcontainer' + this.document.version;
 	}
 
-	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
+	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, sendCodeLenses: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
 		this.document = document;
 		this.sendDiagnostics = sendDiagnostics;
 		this.sendProgress = sendProgress;
 		this.sendPerformanceStats = sendPerformanceStats;
+		this.sendCodeLenses = sendCodeLenses;
 		this.DA_problems = [];
 		this.SA_problems = SA_problems;
 		this.dockerfile = dockerfile;
 		this.docker = docker;
+		this.codeLenses = [];
 
 		if(this.dockerfile.getENTRYPOINTs()[0] != null){
 			this.entrypointInstruction = this.dockerfile.getENTRYPOINTs()[0];
@@ -96,6 +100,14 @@ export class DynamicAnalysis {
 		})
 	}
 
+	publishCodeLenses(){
+		if (this.isDestroyed) {
+			return;
+		}
+
+		this.sendCodeLenses(this.codeLenses);
+	}
+
 	publishDiagnostics() {
 		if (this.isDestroyed) {
 			return;
@@ -115,6 +127,20 @@ export class DynamicAnalysis {
 
 	addDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, code?: ValidationCode) {
 		this.DA_problems.push(this.createDiagnostic(severity, range, message, code));
+	}
+
+	createCodeLens(range: Range, title: string, command?: string) : CodeLens{
+		return {
+			range: range,
+				command: {
+					title: title,
+					command: command || ""
+				}
+		};
+	}
+
+	addCodeLens(range: Range, title: string, command?: string){
+		this.codeLenses.push(this.createCodeLens(range,title,command));
 	}
 
 	buildContainer() {
@@ -853,7 +879,7 @@ export class DynamicAnalysis {
 
 	restart(): DynamicAnalysis {
 		this.destroy();
-		return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.SA_problems, this.dockerfile, this.docker);
+		return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.sendCodeLenses, this.SA_problems, this.dockerfile, this.docker);
 	}
 
 	destroy() {

@@ -4,7 +4,7 @@
  * ------------------------------------------------------------------------------------------ */
 'use strict';
 
-import { TextDocument, Diagnostic, TextEdit, FormattingOptions } from 'vscode-languageserver-types';
+import { TextDocument, Diagnostic, TextEdit, FormattingOptions, CodeLens } from 'vscode-languageserver-types';
 import { DockerFormatter } from './dockerFormatter';
 import { Validator } from './dockerValidator';
 
@@ -192,9 +192,9 @@ const validator = new Validator();
 /**
  * Validates the Dockerfile that is contained in the given string.
  */
-export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, settings?: ValidatorSettings): Diagnostic[] {
+export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[] {
     validator.setSettings(settings);
-    return validator.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats);
+    return validator.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendCodeLenses);
 }
 
 export function stopAnalysis(){

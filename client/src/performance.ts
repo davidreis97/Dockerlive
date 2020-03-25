@@ -329,8 +329,6 @@ export class PerformanceGraphs {
 					window.addEventListener('message', event => {
 						const message = event.data;
 						
-						console.log(message);
-
 						if(cpuChart.data.labels.length == 0){
 							cpuChart.data.labels = message.cpu.map((_val,index,_arr) => message.cpu.length - index);
 						}

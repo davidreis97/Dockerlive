@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 import {
-    Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, Location, DocumentHighlight, SymbolInformation, SignatureHelp, TextEdit, DocumentLink, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange, TextDocument
+    Position, CompletionItem, Range, CodeActionContext, Command, TextDocumentIdentifier, Location, DocumentHighlight, SymbolInformation, SignatureHelp, TextEdit, DocumentLink, Hover, FormattingOptions, Diagnostic, MarkupKind, FoldingRange, TextDocument, CodeLens
 } from 'vscode-languageserver-types';
 import { ValidatorSettings } from '../../dockerfile-utils/src/main';
 import { LanguageService } from './languageService';
@@ -40,6 +40,15 @@ export namespace DockerfileLanguageServiceFactory {
 }
 
 export interface Capabilities {
+    /**
+     * Capabilities related to code lens requests.
+     */
+    codeLens?:{
+        /**
+         * Whether code lens supports dynamic registration.
+         */
+        dynamicRegistration?: boolean;
+    },
     /**
      * Capabilities related to completion requests.
      */
@@ -135,7 +144,7 @@ export interface DockerfileLanguageService {
 
     currentContainerName(): string;
 
-    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, settings?: ValidatorSettings): Diagnostic[];
+    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[];
 
     format(content: string, options: FormattingOptions): TextEdit[];
 

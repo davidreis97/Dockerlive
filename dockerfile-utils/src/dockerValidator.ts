@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 import {
-    TextDocument, Range, Position, Diagnostic, DiagnosticSeverity
+    TextDocument, Range, Position, Diagnostic, DiagnosticSeverity, CodeLens
 } from 'vscode-languageserver-types';
 import { Dockerfile, Flag, Instruction, JSONInstruction, Add, Arg, Cmd, Copy, Entrypoint, From, Healthcheck, Onbuild, ModifiableInstruction, PropertyInstruction, Property, DockerfileParser, Directive, Keyword } from 'dockerfile-ast';
 import { ValidationCode, ValidationSeverity, ValidatorSettings } from './main';
@@ -221,7 +221,7 @@ export class Validator {
         }
     }
 
-    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function): Diagnostic[] {
+    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function): Diagnostic[] {
         this.document = document;
         let problems: Diagnostic[] = [];
         let dockerfile = DockerfileParser.parse(document.getText());
@@ -347,7 +347,7 @@ export class Validator {
                 if (this.dynamicAnalysis) {
                     this.dynamicAnalysis.destroy();
                 }
-                this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, problems, dockerfile, this.docker);
+                this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendCodeLenses, problems, dockerfile, this.docker);
             }
         }
 
