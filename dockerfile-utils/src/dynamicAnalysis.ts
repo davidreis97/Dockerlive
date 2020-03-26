@@ -961,7 +961,9 @@ export class DynamicAnalysis {
 	}
 
 	destroy() {
-		this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
+		if(this.DA_container_processes)
+			this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
+		
 		this.publishDiagnostics();
 		
 		this.isDestroyed = true;
