@@ -209,7 +209,7 @@ export class DynamicAnalysis {
 									this.log("Something went wrong parsing Docker build steps...");
 								}
 							}else if(parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g)){
-								intermediateImagesIDs[currentStep] = parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g);
+								intermediateImagesIDs[currentStep-1] = parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g);
 							}
 
 							if (parsedData["stream"].match("Successfully built")) {
@@ -221,7 +221,7 @@ export class DynamicAnalysis {
 								const timeDiference = (currentTimeMs - timestamp)/1000;
 								this.addCodeLens(lastInstructionRange,`${timeDiference.toFixed(3)}s`);
 								this.publishCodeLenses();
-								this.getImageHistory();
+								this.getImageHistory(intermediateImagesIDs);
 							}
 						} else if (parsedData["status"]) {
 							this.log("Status", parsedData["status"]);
@@ -243,8 +243,8 @@ export class DynamicAnalysis {
 	}
 
 
-	getImageHistory() {
-		this.docker.getImage("testimage").history((err,data)=>{
+	getImageHistory(intermediateImagesIDs: string[]) {
+		this.docker.getImage("testimage").history((err,intermediateLayers)=>{
 			if (this.isDestroyed) {
 				return;
 			}
@@ -253,7 +253,37 @@ export class DynamicAnalysis {
 				this.debugLog("Error getting image history", err);
 			}
 
-			console.log(data);
+			for(let [intermediateImageIndex,imageID] of intermediateImagesIDs.entries()){
+				for(let [intermediateLayerIndex,layer] of intermediateLayers.entries()){
+					if(layer.Id !== "<missing>" && layer.Id.includes(`sha256:${imageID}`)){
+						let size : number = layer.Size;
+						for(let tempIndex = intermediateLayerIndex+1; tempIndex < intermediateLayers.length; tempIndex++){
+							if(intermediateLayers[tempIndex].Id === "<missing>"){
+								size += intermediateLayers[tempIndex].Size;
+							}else{
+								break;
+							}
+						}
+						let instructionRange : Range = this.dockerfile.getInstructions()[intermediateImageIndex].getRange();
+						let unit = "B";
+						if(size > 1000000000){
+							unit = "GB";
+							size /= 1000000000;
+						}else if(size > 1000000){
+							unit = "MB";
+							size /= 1000000;
+						}else if(size > 1000){
+							unit = "KB";
+							size /= 1000;
+						}
+						this.addCodeLens(instructionRange,size.toFixed(2) + unit);
+
+						break;
+					}
+				}
+			}
+
+			this.publishCodeLenses();
 		});	
 	}
 
@@ -294,6 +324,7 @@ export class DynamicAnalysis {
 				this.getPerformance();
 				this.getOS();
 
+				this.checkEnvVar();
 				this.checkProcessesInterval = setInterval(this.checkEnvVar.bind(this), CHECK_PROCESSES_INTERVAL);
 
 				container.wait((err, data) => {
@@ -310,7 +341,7 @@ export class DynamicAnalysis {
 						this.addDiagnostic(DiagnosticSeverity.Error, this.entrypointInstruction.getRange(), "Container Exited with code (" + data.StatusCode + ") - See Logs");
 						this.publishDiagnostics();
 					}
-					this.destroy();
+					//this.destroy();
 				});
 			});
 
@@ -337,8 +368,11 @@ export class DynamicAnalysis {
 			return null;
 		}
 		let processList = await this.execWithStatusCode(["ps", "-eo", "pid,ppid,args"]);
-		if (processList.exitCode != 0) {
-			this.debugLog("Could not get running processes", processList.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+		if (!processList || processList.exitCode != 0) {
+			this.debugLog("Could not get running processes", processList ? processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '') : "null");
+			this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
+			this.publishDiagnostics();
+			clearInterval(this.checkProcessesInterval);
 			return null;
 		}
 
@@ -385,8 +419,8 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		if (envVar.exitCode != 0) {
-			this.debugLog("Could not verify envVars of command", process.cmd, envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, ''));
+		if (!envVar || envVar.exitCode != 0) {
+			this.debugLog("Could not verify envVars of command", process.cmd, envVar ? envVar.output.toString().replace(/[^\x20-\x7E|\n]/g, '') : "null");
 			return null;
 		}
 
@@ -763,11 +797,17 @@ export class DynamicAnalysis {
 						for (const nmapPort of nmapPorts) {
 							const portID = parseInt(nmapPort['$']['portid']);
 							const protocol = nmapPort['$']['protocol'];
+
+							const index = mappedPorts.findIndex((value, _index, _obj) => (value == portID));
+
+							if(nmapPort['state']['0']['$']['state'] == "closed"){
+								this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`);
+								continue;
+							}
+
 							const serviceName = nmapPort['service'][0]['$']['name'];
 							const serviceProduct = nmapPort['service'][0]['$']['product'];
 							const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
-
-							const index = mappedPorts.findIndex((value, _index, _obj) => (value == portID));
 
 							//? Assumes that when nmap can't identify the service there's nothing running there. 
 							//? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
@@ -873,7 +913,7 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		this.container.stats((err, stream) => {
+		this.container.stats((err, stream: Stream) => {
 			if (this.isDestroyed) {
 				return;
 			}
@@ -888,6 +928,10 @@ export class DynamicAnalysis {
 					return;
 				}
 				let parsedData = JSON.parse(data.toString());
+
+				if(JSON.stringify(parsedData.memory_stats) === "{}"){
+					return;
+				}
 
 				this.sendPerformanceStats({
 					running: true,
@@ -917,6 +961,9 @@ export class DynamicAnalysis {
 	}
 
 	destroy() {
+		this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
+		this.publishDiagnostics();
+		
 		this.isDestroyed = true;
 
 		this.debugLog("Destroying Analysis");
