@@ -12,6 +12,7 @@ import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
+var stripAnsi = require("strip-ansi");
 
 export const DEBUG = false;
 const MAX_ANALYSED_PROCESSES = 10;
@@ -998,9 +999,9 @@ export class DynamicAnalysis {
 
 	log(...msgs: String[]) {
 		if (DEBUG) {
-			console.log("[" + this.document.version + "] " + msgs.join(": "));
+			console.log("[" + this.document.version + "] " + msgs.map((msg,_i,_a) => stripAnsi(msg)).join(": "));
 		} else {
-			console.log(msgs[msgs.length - 1].toString().replace(/\e\[[0-9;]*m(?:\e\[K)?/g, "")); //Remove ANSI escape sequences
+			console.log(stripAnsi(msgs[msgs.length - 1].toString().replace(/\e\[[0-9;]*m(?:\e\[K)?/g, "")));
 		}
 	}
 }
