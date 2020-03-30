@@ -12,6 +12,7 @@ import tar from 'tar-fs';
 import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
+import { table } from 'table';
 var stripAnsi = require("strip-ansi");
 
 export const DEBUG = true;
@@ -371,19 +372,17 @@ export class DynamicAnalysis {
 		let processList = await this.execWithStatusCode(["ps", "-eo", "pid,ppid,args"]);
 		if (!processList || processList.exitCode != 0) {
 			this.debugLog("Could not get running processes", processList ? processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '') : "null");
-			this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
+			if(this.DA_container_processes)
+				this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
 			this.publishDiagnostics();
 			clearInterval(this.checkProcessesInterval);
 			return null;
 		}
 
 		let processes: ContainerProcess[] = [];
+		let tableData = [["PID","PPID","CMD"]];
 
 		let sanitizedOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
-
-		this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint, this.entrypointInstruction.getArgumentsRange(), "Running Processes:\n" + sanitizedOutput);
-
-		this.publishDiagnostics();
 
 		let psOutput = sanitizedOutput.split("\n").slice(1); //Remove bad characters, split by line and remove header line
 		for (let line of psOutput) {
@@ -396,7 +395,13 @@ export class DynamicAnalysis {
 				ppid: parseInt(splitLine[2]),
 				cmd: splitLine.slice(3).join(" ")
 			});
+
+			tableData.push([splitLine[1],splitLine[2],splitLine.slice(3).join(" ")]);
 		}
+
+		this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint, this.entrypointInstruction.getArgumentsRange(), table(tableData));
+
+		this.publishDiagnostics();
 
 		//Slightly modified from https://stackoverflow.com/a/40732240/6391820
 		const createDataTree = (dataset: ContainerProcess[]): ContainerProcess[] => {
@@ -813,7 +818,9 @@ export class DynamicAnalysis {
 							//? Assumes that when nmap can't identify the service there's nothing running there. 
 							//? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
 							//? If this assumption is proven wrong, fallback on inspec to check if the port is listening
-							if (serviceName != "tcpwrapped") {
+							if (serviceName == "tcpwrapped") {
+								this.addDiagnostic(DiagnosticSeverity.Warning, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not identify service running`);
+							} else {
 								let msg = `Port ${ports[index]} (exposed on ${portID}) - ${protocol}`;
 								if (serviceName) {
 									msg += "/" + serviceName;
@@ -826,8 +833,6 @@ export class DynamicAnalysis {
 								}
 
 								this.addDiagnostic(DiagnosticSeverity.Hint, rangesInFile[index], msg);
-							} else {
-								this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`);
 							}
 						}
 						this.publishDiagnostics();
