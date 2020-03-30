@@ -14,7 +14,7 @@ import child_process from 'child_process';
 import xml2js from 'xml2js';
 var stripAnsi = require("strip-ansi");
 
-export const DEBUG = false;
+export const DEBUG = true;
 const MAX_ANALYSED_PROCESSES = 10;
 const CHECK_PROCESSES_INTERVAL = 500; //ms
 
@@ -1007,7 +1007,15 @@ export class DynamicAnalysis {
 }
 
 function json_escape(str: string) {
-	return str.replace("\\n", "").replace("\n", "");
+	return str.replace(/\\n/g, "\\n")  
+	.replace(/\\'/g, "\\'")
+	.replace(/\\"/g, '\\"')
+	.replace(/\\&/g, "\\&")
+	.replace(/\\r/g, "\\r")
+	.replace(/\\t/g, "\\t")
+	.replace(/\\b/g, "\\b")
+	.replace(/\\f/g, "\\f")
+	.replace(/[\u0000-\u0019]+/g,"");
 }
 
 function parsePairs(str) {
