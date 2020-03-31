@@ -341,7 +341,7 @@ export class Validator {
         }
 
         if (!foundError) {
-            if (this.dynamicAnalysis && this.dynamicAnalysis.document.version > document.version) {
+            if (this.dynamicAnalysis && (this.dynamicAnalysis.document.version > document.version || this.dynamicAnalysis.document.uri != document.uri)) {
                 return [];
             } else {
                 if (this.dynamicAnalysis) {

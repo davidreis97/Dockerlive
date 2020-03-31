@@ -38,16 +38,15 @@ export class DynamicAnalysis {
 	public sendProgress: Function;
 	public sendPerformanceStats: Function;
 	public sendCodeLenses: Function;
-	public DA_problems: Diagnostic[];
-	public DA_container_processes: Diagnostic;
+	public DA_problems: Map<string, Diagnostic>;
 	public SA_problems: Diagnostic[];
 	public dockerfile: Dockerfile;
 	public docker: Dockerode;
 	public container: any;
-	public entrypointInstruction : Instruction;
+	public entrypointInstruction: Instruction;
 	public codeLenses: CodeLens[];
 
-	public checkProcessesInterval;
+	public checkProcessesInterval: NodeJS.Timeout;
 
 	public isDestroyed: boolean = false;
 
@@ -61,19 +60,21 @@ export class DynamicAnalysis {
 		this.sendProgress = sendProgress;
 		this.sendPerformanceStats = sendPerformanceStats;
 		this.sendCodeLenses = sendCodeLenses;
-		this.DA_problems = [];
+		this.DA_problems = new Map();
 		this.SA_problems = SA_problems;
 		this.dockerfile = dockerfile;
 		this.docker = docker;
 		this.codeLenses = [];
 
-		if(this.dockerfile.getENTRYPOINTs()[0] != null){
+		if (this.dockerfile.getENTRYPOINTs()[0] != null) {
 			this.entrypointInstruction = this.dockerfile.getENTRYPOINTs()[0];
-		}else if(this.dockerfile.getCMDs()[0] != null){
+		} else if (this.dockerfile.getCMDs()[0] != null) {
 			this.entrypointInstruction = this.dockerfile.getCMDs()[0];
-		}else{
+		} else {
 			this.entrypointInstruction = this.dockerfile.getInstructions()[this.dockerfile.getInstructions().length - 1];
 		}
+
+		sendDiagnostics(this.SA_problems);
 
 		this.clearPreviousContainers().then((success) => { if (success) this.buildContainer() });
 	}
@@ -102,7 +103,7 @@ export class DynamicAnalysis {
 		})
 	}
 
-	publishCodeLenses(){
+	publishCodeLenses() {
 		if (this.isDestroyed) {
 			return;
 		}
@@ -115,10 +116,7 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		let problems = this.DA_problems.concat(this.SA_problems);
-		if (this.DA_container_processes != null) {
-			problems.push(this.DA_container_processes);
-		}
+		let problems = Array.from(this.DA_problems.values());
 
 		this.sendDiagnostics(this.document.uri, problems);
 	}
@@ -127,22 +125,33 @@ export class DynamicAnalysis {
 		return Validator.createDockerliveDiagnostic(severity, range, message, code);
 	}
 
-	addDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, code?: ValidationCode) {
-		this.DA_problems.push(this.createDiagnostic(severity, range, message, code));
+	genKey(range: Range, identifier?: string): string {
+		return `s${range.start.line}-${range.start.character}--e${range.end.line}-${range.end.character}-id${identifier}`;
 	}
 
-	createCodeLens(range: Range, title: string, command?: string) : CodeLens{
+	getDiagnostic(range: Range, identifier?: string): Diagnostic {
+		return this.DA_problems.get(this.genKey(range, identifier));
+	}
+
+	addDiagnostic(severity: DiagnosticSeverity, range: Range, message: string, identifier?: string, code?: ValidationCode) {
+		if(!identifier){
+			identifier = Math.round(Math.random() * 100000000).toString(); //If identifier is not specified, make sure that a unique identifier is generated
+		}
+		this.DA_problems.set(this.genKey(range, identifier), this.createDiagnostic(severity, range, message, code));
+	}
+
+	createCodeLens(range: Range, title: string, command?: string): CodeLens {
 		return {
 			range: range,
-				command: {
-					title: title,
-					command: command || ""
-				}
+			command: {
+				title: title,
+				command: command || ""
+			}
 		};
 	}
 
-	addCodeLens(range: Range, title: string, command?: string){
-		this.codeLenses.push(this.createCodeLens(range,title,command));
+	addCodeLens(range: Range, title: string, command?: string) {
+		this.codeLenses.push(this.createCodeLens(range, title, command));
 	}
 
 	buildContainer() {
@@ -197,11 +206,11 @@ export class DynamicAnalysis {
 									currentStep = parseInt(tokenizedData[0].match(/\d+/)[0]);
 									//const totalSteps = parseInt(tokenizedData[1].match(/\d+/)[0]);
 
-									if(currentStep > 1){
-										const previousInstructionRange = this.dockerfile.getInstructions()[currentStep-2].getRange();
+									if (currentStep > 1) {
+										const previousInstructionRange = this.dockerfile.getInstructions()[currentStep - 2].getRange();
 										const currentTimeMs = Date.now();
-										const timeDiference = (currentTimeMs - timestamp)/1000;
-										this.addCodeLens(previousInstructionRange,`${timeDiference.toFixed(3)}s`);
+										const timeDiference = (currentTimeMs - timestamp) / 1000;
+										this.addCodeLens(previousInstructionRange, `${timeDiference.toFixed(3)}s`);
 										timestamp = currentTimeMs;
 										this.publishCodeLenses();
 									}
@@ -210,18 +219,18 @@ export class DynamicAnalysis {
 								} catch (e) {
 									this.log("Something went wrong parsing Docker build steps...");
 								}
-							}else if(parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g)){
-								intermediateImagesIDs[currentStep-1] = parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g);
+							} else if (parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g)) {
+								intermediateImagesIDs[currentStep - 1] = parsedData["stream"].match(/(?<=---> )(\d|[a-f])+/g);
 							}
 
 							if (parsedData["stream"].match("Successfully built")) {
-								this.DA_problems = [];
+								this.DA_problems = new Map();
 								this.publishDiagnostics();
 								this.runContainer();
-								const lastInstructionRange = this.dockerfile.getInstructions()[this.dockerfile.getInstructions().length-1].getRange();
+								const lastInstructionRange = this.dockerfile.getInstructions()[this.dockerfile.getInstructions().length - 1].getRange();
 								const currentTimeMs = Date.now();
-								const timeDiference = (currentTimeMs - timestamp)/1000;
-								this.addCodeLens(lastInstructionRange,`${timeDiference.toFixed(3)}s`);
+								const timeDiference = (currentTimeMs - timestamp) / 1000;
+								this.addCodeLens(lastInstructionRange, `${timeDiference.toFixed(3)}s`);
 								this.publishCodeLenses();
 								this.getImageHistory(intermediateImagesIDs);
 							}
@@ -231,6 +240,7 @@ export class DynamicAnalysis {
 							this.addDiagnostic(DiagnosticSeverity.Error, this.dockerfile.getInstructions()[currentStep - 1].getRange(), parsedData["errorDetail"]["message"]);
 							this.publishDiagnostics();
 							this.log("ErrorDetail", parsedData["errorDetail"]["message"]);
+							this.sendProgress(true);
 						} else {
 							this.debugLog("Other", data.toString());
 						}
@@ -246,7 +256,7 @@ export class DynamicAnalysis {
 
 
 	getImageHistory(intermediateImagesIDs: string[]) {
-		this.docker.getImage("testimage").history((err,intermediateLayers)=>{
+		this.docker.getImage("testimage").history((err, intermediateLayers) => {
 			if (this.isDestroyed) {
 				return;
 			}
@@ -255,30 +265,30 @@ export class DynamicAnalysis {
 				this.debugLog("Error getting image history", err);
 			}
 
-			for(let [intermediateImageIndex,imageID] of intermediateImagesIDs.entries()){
-				for(let [intermediateLayerIndex,layer] of intermediateLayers.entries()){
-					if(layer.Id !== "<missing>" && layer.Id.includes(`sha256:${imageID}`)){
-						let size : number = layer.Size;
-						for(let tempIndex = intermediateLayerIndex+1; tempIndex < intermediateLayers.length; tempIndex++){
-							if(intermediateLayers[tempIndex].Id === "<missing>"){
+			for (let [intermediateImageIndex, imageID] of intermediateImagesIDs.entries()) {
+				for (let [intermediateLayerIndex, layer] of intermediateLayers.entries()) {
+					if (layer.Id !== "<missing>" && layer.Id.includes(`sha256:${imageID}`)) {
+						let size: number = layer.Size;
+						for (let tempIndex = intermediateLayerIndex + 1; tempIndex < intermediateLayers.length; tempIndex++) {
+							if (intermediateLayers[tempIndex].Id === "<missing>") {
 								size += intermediateLayers[tempIndex].Size;
-							}else{
+							} else {
 								break;
 							}
 						}
-						let instructionRange : Range = this.dockerfile.getInstructions()[intermediateImageIndex].getRange();
+						let instructionRange: Range = this.dockerfile.getInstructions()[intermediateImageIndex].getRange();
 						let unit = "B";
-						if(size > 1000000000){
+						if (size > 1000000000) {
 							unit = "GB";
 							size /= 1000000000;
-						}else if(size > 1000000){
+						} else if (size > 1000000) {
 							unit = "MB";
 							size /= 1000000;
-						}else if(size > 1000){
+						} else if (size > 1000) {
 							unit = "KB";
 							size /= 1000;
 						}
-						this.addCodeLens(instructionRange,size.toFixed(2) + unit);
+						this.addCodeLens(instructionRange, size.toFixed(2) + unit);
 
 						break;
 					}
@@ -286,7 +296,7 @@ export class DynamicAnalysis {
 			}
 
 			this.publishCodeLenses();
-		});	
+		});
 	}
 
 	runContainer() {
@@ -322,7 +332,7 @@ export class DynamicAnalysis {
 				}
 				this.log("STARTED CONTAINER", data);
 
-				this.runNmap();
+				this.runServiceDiscovery();
 				this.getPerformance();
 				this.getOS();
 
@@ -372,15 +382,16 @@ export class DynamicAnalysis {
 		let processList = await this.execWithStatusCode(["ps", "-eo", "pid,ppid,args"]);
 		if (!processList || processList.exitCode != 0) {
 			this.debugLog("Could not get running processes", processList ? processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '') : "null");
-			if(this.DA_container_processes)
-				this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
+			let DA_container_processes = this.getDiagnostic(this.entrypointInstruction.getArgumentsRange(), "container_processes");
+			if (DA_container_processes)
+				DA_container_processes.message = DA_container_processes.message.replace("Running Processes:", "Container Stopped. Last Processes:");
 			this.publishDiagnostics();
 			clearInterval(this.checkProcessesInterval);
 			return null;
 		}
 
 		let processes: ContainerProcess[] = [];
-		let tableData = [["PID","PPID","CMD"]];
+		let tableData = [["PID", "PPID", "CMD"]];
 
 		let sanitizedOutput = processList.output.toString().replace(/[^\x20-\x7E|\n]/g, '');
 
@@ -396,10 +407,10 @@ export class DynamicAnalysis {
 				cmd: splitLine.slice(3).join(" ")
 			});
 
-			tableData.push([splitLine[1],splitLine[2],splitLine.slice(3).join(" ")]);
+			tableData.push([splitLine[1], splitLine[2], splitLine.slice(3).join(" ")]);
 		}
 
-		this.DA_container_processes = this.createDiagnostic(DiagnosticSeverity.Hint, this.entrypointInstruction.getArgumentsRange(), table(tableData));
+		this.addDiagnostic(DiagnosticSeverity.Hint, this.entrypointInstruction.getArgumentsRange(), table(tableData), "container_processes");
 
 		this.publishDiagnostics();
 
@@ -454,10 +465,6 @@ export class DynamicAnalysis {
 		return null;
 	}
 
-	private hasProblemInRange(range: Range): boolean {
-		return this.DA_problems.find((problem, _index, _arr) => JSON.stringify(problem.range) == JSON.stringify(range)) != null;
-	}
-
 	private async checkEnvVar() {
 		let envVarInsts = this.dockerfile.getENVs();
 		let parsedEnvVars = {}
@@ -486,7 +493,7 @@ export class DynamicAnalysis {
 
 		let rootProcesses = await this.getRunningProcesses();
 
-		if (this.isDestroyed) {
+		if (this.isDestroyed || envVarInsts.length == 0) {
 			return;
 		}
 
@@ -518,7 +525,7 @@ export class DynamicAnalysis {
 					if (parentProcess != null) {
 						msg += `\nChange occurred after executing: ${parentProcess.cmd}`;
 					}
-					if (!this.hasProblemInRange(change.range)) {
+					if (!this.getDiagnostic(change.range)) {
 						this.addDiagnostic(DiagnosticSeverity.Warning, change.range, msg);
 						addedDiagnostic = true;
 					}
@@ -717,7 +724,7 @@ export class DynamicAnalysis {
 		this.publishDiagnostics();
 	}
 
-	private runNmap() {
+	private runServiceDiscovery() {
 		const rangesInFile: Range[] = [];
 		const ports: number[] = [];
 		const protocols: string[] = [];
@@ -774,77 +781,83 @@ export class DynamicAnalysis {
 
 			this.sendProgress("Running nmap...");
 
-			const nmapCommand = `nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV --version-light`;
+			this.runNmap(tcpMappedPorts, mappedPorts, rangesInFile, ports);
+		});
+	}
 
-			this.debugLog("Running: " + nmapCommand);
+	private runNmap(tcpMappedPorts, mappedPorts, rangesInFile, ports) {
+		const nmapCommand = `nmap -oX - 127.0.0.1 -p ${tcpMappedPorts.join(",")} -sV --version-light`;
 
-			child_process.exec(nmapCommand, (err: child_process.ExecException, stdout: string, _stderr: string) => {
+		this.debugLog("Running: " + nmapCommand);
+
+		child_process.exec(nmapCommand, (err: child_process.ExecException, stdout: string, _stderr: string) => {
+			if (this.isDestroyed) {
+				this.sendProgress(true);
+				return;
+			}
+			if (err) {
+				this.debugLog("ERROR EXECUTING NMAP", err.message);
+				this.sendProgress(true);
+				return;
+			}
+			xml2js.parseString(stdout, (err: Error, result) => {
 				if (this.isDestroyed) {
 					this.sendProgress(true);
 					return;
 				}
 				if (err) {
-					this.debugLog("ERROR EXECUTING NMAP", err.message);
+					this.log("ERROR PARSING NMAP OUTPUT XML", err.message);
 					this.sendProgress(true);
 					return;
 				}
-				xml2js.parseString(stdout, (err: Error, result) => {
-					if (this.isDestroyed) {
-						this.sendProgress(true);
-						return;
-					}
-					if (err) {
-						this.log("ERROR PARSING NMAP OUTPUT XML", err.message);
-						this.sendProgress(true);
-						return;
-					}
-					try {
-						const nmapPorts: Array<any> = result['nmaprun']['host']['0']['ports']['0']['port'];
-						for (const nmapPort of nmapPorts) {
-							const portID = parseInt(nmapPort['$']['portid']);
-							const protocol = nmapPort['$']['protocol'];
+				try {
+					const nmapPorts: Array<any> = result['nmaprun']['host']['0']['ports']['0']['port'];
+					for (const nmapPort of nmapPorts) {
+						const portID = parseInt(nmapPort['$']['portid']);
+						const protocol = nmapPort['$']['protocol'];
 
-							const index = mappedPorts.findIndex((value, _index, _obj) => (value == portID));
+						const index = mappedPorts.findIndex((value, _index, _obj) => (value == portID));
 
-							if(nmapPort['state']['0']['$']['state'] == "closed"){
-								this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`);
-								continue;
-							}
-
-							const serviceName = nmapPort['service'][0]['$']['name'];
-							const serviceProduct = nmapPort['service'][0]['$']['product'];
-							const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
-
-							//? Assumes that when nmap can't identify the service there's nothing running there. 
-							//? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
-							//? If this assumption is proven wrong, fallback on inspec to check if the port is listening
-							if (serviceName == "tcpwrapped") {
-								this.addDiagnostic(DiagnosticSeverity.Warning, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not identify service running`);
-							} else {
-								let msg = `Port ${ports[index]} (exposed on ${portID}) - ${protocol}`;
-								if (serviceName) {
-									msg += "/" + serviceName;
-								}
-								if (serviceProduct) {
-									msg += " - " + serviceProduct;
-								}
-								if (serviceExtrainfo) {
-									msg += " (" + serviceExtrainfo + ")";
-								}
-
-								this.addDiagnostic(DiagnosticSeverity.Hint, rangesInFile[index], msg);
-							}
+						if (nmapPort['state']['0']['$']['state'] == "closed") {
+							this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`,portID.toString());
+							continue;
 						}
-						this.publishDiagnostics();
 
-						this.sendProgress(true); //! - Probably will need to change when implementing inspec / other feedback
-					} catch (e) {
-						this.log("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
-						this.sendProgress(true);
+						const serviceName = nmapPort['service'][0]['$']['name'];
+						const serviceProduct = nmapPort['service'][0]['$']['product'];
+						const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
+
+						//? Assumes that when nmap can't identify the service there's nothing running there. 
+						//? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
+						//? If this assumption is proven wrong, fallback on inspec to check if the port is listening
+						if (serviceName == "tcpwrapped") {
+							this.addDiagnostic(DiagnosticSeverity.Warning, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not identify service running`,portID.toString());
+						} else {
+							let msg = `Port ${ports[index]} (exposed on ${portID}) - ${protocol}`;
+							if (serviceName) {
+								msg += "/" + serviceName;
+							}
+							if (serviceProduct) {
+								msg += " - " + serviceProduct;
+							}
+							if (serviceExtrainfo) {
+								msg += " (" + serviceExtrainfo + ")";
+							}
+
+							this.addDiagnostic(DiagnosticSeverity.Hint, rangesInFile[index], msg, portID.toString());
+						}
 					}
-				});
-			})
-		});
+					this.publishDiagnostics();
+
+					this.sendProgress(true); //! - Probably will need to change when implementing inspec / other feedback
+				} catch (e) {
+					this.log("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
+					this.sendProgress(true);
+				}
+
+				this.runNmap(tcpMappedPorts, mappedPorts, rangesInFile, ports);
+			});
+		})
 	}
 
 	//Based on https://github.com/moby/moby/blob/eb131c5383db8cac633919f82abad86c99bffbe5/cli/command/container/stats_helpers.go#L175-L188
@@ -935,7 +948,7 @@ export class DynamicAnalysis {
 				}
 				let parsedData = JSON.parse(data.toString());
 
-				if(JSON.stringify(parsedData.memory_stats) === "{}"){
+				if (JSON.stringify(parsedData.memory_stats) === "{}") {
 					return;
 				}
 
@@ -967,11 +980,12 @@ export class DynamicAnalysis {
 	}
 
 	destroy() {
-		if(this.DA_container_processes)
-			this.DA_container_processes.message = this.DA_container_processes.message.replace("Running Processes:","Container Stopped. Last Processes:");
-		
+		let DA_container_processes = this.getDiagnostic(this.entrypointInstruction.getArgumentsRange(), "container_processes");
+		if (DA_container_processes)
+			DA_container_processes.message = DA_container_processes.message.replace("Running Processes:", "Container Stopped. Last Processes:");
+
 		this.publishDiagnostics();
-		
+
 		this.isDestroyed = true;
 
 		this.debugLog("Destroying Analysis");
@@ -1004,7 +1018,7 @@ export class DynamicAnalysis {
 
 	log(...msgs: String[]) {
 		if (DEBUG) {
-			console.log("[" + this.document.version + "] " + msgs.map((msg,_i,_a) => stripAnsi(msg)).join(": "));
+			console.log("[" + this.document.version + "] " + msgs.map((msg, _i, _a) => stripAnsi(msg)).join(": "));
 		} else {
 			console.log(stripAnsi(msgs[msgs.length - 1].toString().replace(/\e\[[0-9;]*m(?:\e\[K)?/g, "")));
 		}
@@ -1012,15 +1026,15 @@ export class DynamicAnalysis {
 }
 
 function json_escape(str: string) {
-	return str.replace(/\\n/g, "\\n")  
-	.replace(/\\'/g, "\\'")
-	.replace(/\\"/g, '\\"')
-	.replace(/\\&/g, "\\&")
-	.replace(/\\r/g, "\\r")
-	.replace(/\\t/g, "\\t")
-	.replace(/\\b/g, "\\b")
-	.replace(/\\f/g, "\\f")
-	.replace(/[\u0000-\u0019]+/g,"");
+	return str.replace(/\\n/g, "\\n")
+		.replace(/\\'/g, "\\'")
+		.replace(/\\"/g, '\\"')
+		.replace(/\\&/g, "\\&")
+		.replace(/\\r/g, "\\r")
+		.replace(/\\t/g, "\\t")
+		.replace(/\\b/g, "\\b")
+		.replace(/\\f/g, "\\f")
+		.replace(/[\u0000-\u0019]+/g, "");
 }
 
 function parsePairs(str) {
