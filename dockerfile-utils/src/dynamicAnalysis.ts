@@ -526,7 +526,7 @@ export class DynamicAnalysis {
 						msg += `\nChange occurred after executing: ${parentProcess.cmd}`;
 					}
 					if (!this.getDiagnostic(change.range)) {
-						this.addDiagnostic(DiagnosticSeverity.Warning, change.range, msg);
+						this.addDiagnostic(DiagnosticSeverity.Warning, change.range, msg, change.name);
 						addedDiagnostic = true;
 					}
 				}
