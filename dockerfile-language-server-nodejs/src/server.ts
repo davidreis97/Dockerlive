@@ -376,13 +376,21 @@ function endProgress(token: string, message?: string){
 }
 
 function sendCodeLenses(codeLenses: CodeLens[]){
+	if(!codeLenses)
+		codeLenses = [];
 	connection.sendNotification("dockerlive/didChangeCodeLenses",{
 		codeLenses: codeLenses
 	});
 }
 
 function sendDiagnostics(documentURI: string, diagnostics: Diagnostic[]){
-	connection.sendDiagnostics({uri: documentURI, diagnostics});
+	if(!diagnostics){
+		diagnostics = [];
+	}
+	if(!documentURI){
+		return;
+	}
+	connection.sendDiagnostics({uri: documentURI, diagnostics: diagnostics});
 }
 
 function sendPerformanceStats(stats){
