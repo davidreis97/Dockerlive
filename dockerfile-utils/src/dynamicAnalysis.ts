@@ -810,7 +810,7 @@ export class DynamicAnalysis {
 					return;
 				}
 				if (err) {
-					this.log("ERROR PARSING NMAP OUTPUT XML", err.message);
+					this.debugLog("ERROR PARSING NMAP OUTPUT XML", err.message);
 					this.sendProgress(true);
 					return;
 				}
@@ -827,10 +827,24 @@ export class DynamicAnalysis {
 							continue;
 						}
 
-						const serviceName = nmapPort['service'][0]['$']['name'];
-						const serviceProduct = nmapPort['service'][0]['$']['product'];
-						const serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
+						let serviceName;
+						let serviceProduct;
+						let serviceExtrainfo;
 
+						try{
+							serviceName = nmapPort['service'][0]['$']['name'];
+						}catch(_e){
+							serviceName = "unknown"
+						}
+
+						try{
+							serviceProduct = nmapPort['service'][0]['$']['product'];
+						}catch(_e){}
+
+						try{
+							serviceExtrainfo = nmapPort['service'][0]['$']['extrainfo'];
+						}catch(_e){}
+						
 						//? Assumes that when nmap can't identify the service there's nothing running there. 
 						//? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
 						//? If this assumption is proven wrong, fallback on inspec to check if the port is listening
@@ -855,7 +869,7 @@ export class DynamicAnalysis {
 
 					this.sendProgress(true); //! - Probably will need to change when implementing inspec / other feedback
 				} catch (e) {
-					this.log("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
+					this.debugLog("ERROR PARSING NMAP OUTPUT OBJECT", e, "WITH NMAP OUTPUT", JSON.stringify(result));
 					this.sendProgress(true);
 				}
 
