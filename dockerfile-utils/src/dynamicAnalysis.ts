@@ -15,7 +15,7 @@ import xml2js from 'xml2js';
 import { table } from 'table';
 var stripAnsi = require("strip-ansi");
 
-export const DEBUG = true;
+export const DEBUG = false;
 const MAX_ANALYSED_PROCESSES = 10;
 const CHECK_PROCESSES_INTERVAL = 500; //ms
 
@@ -198,6 +198,10 @@ export class DynamicAnalysis {
 					try {
 						const parsedData = JSON.parse(json_escape(data.toString()));
 						if (parsedData["stream"]) {
+							parsedData["stream"] = parsedData["stream"].replace(/(\n$|^\n)/g,"");
+							if(parsedData["stream"] == ""){
+								continue;
+							}
 							this.log("Stream", parsedData["stream"]);
 
 							if (parsedData["stream"].match(/Step \d+\/\d+ :/)) {
@@ -357,7 +361,7 @@ export class DynamicAnalysis {
 				});
 			});
 
-			container.attach({ stream: true, stdout: true, stderr: true }, (err, stream: Stream) => {
+			container.logs({ follow: true, stdout: true, stderr: true }, (err, stream: Stream) => {
 				if (this.isDestroyed) {
 					this.sendProgress(true);
 					return;
@@ -759,7 +763,7 @@ export class DynamicAnalysis {
 		}
 
 		this.container.inspect(async (err, data) => {
-			if (this.isDestroyed) {
+			if (this.isDestroyed || !data.State.Running) {
 				this.sendProgress(true);
 				return;
 			}
@@ -819,7 +823,7 @@ export class DynamicAnalysis {
 						const index = mappedPorts.findIndex((value, _index, _obj) => (value == portID));
 
 						if (nmapPort['state']['0']['$']['state'] == "closed") {
-							this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running`,portID.toString());
+							this.addDiagnostic(DiagnosticSeverity.Error, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not detect service running yet`,portID.toString());
 							continue;
 						}
 
@@ -831,7 +835,7 @@ export class DynamicAnalysis {
 						//? https://security.stackexchange.com/questions/23407/how-to-bypass-tcpwrapped-with-nmap-scan
 						//? If this assumption is proven wrong, fallback on inspec to check if the port is listening
 						if (serviceName == "tcpwrapped") {
-							this.addDiagnostic(DiagnosticSeverity.Warning, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not identify service running`,portID.toString());
+							this.addDiagnostic(DiagnosticSeverity.Warning, rangesInFile[index], `Port ${ports[index]} (exposed on ${portID}) - Could not identify service running yet`,portID.toString());
 						} else {
 							let msg = `Port ${ports[index]} (exposed on ${portID}) - ${protocol}`;
 							if (serviceName) {
