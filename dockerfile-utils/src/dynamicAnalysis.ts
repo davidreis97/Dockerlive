@@ -13,8 +13,7 @@ import { Stream, Duplex } from 'stream';
 import child_process from 'child_process';
 import xml2js from 'xml2js';
 import { table } from 'table';
-import tar_stream from 'tar-stream';
-import internal = require('stream');
+import { getFilesystem } from './filesystemAnalysis';
 
 var stripAnsi = require("strip-ansi");
 
@@ -48,10 +47,11 @@ export class DynamicAnalysis {
 	public container: any;
 	public entrypointInstruction: Instruction;
 	public codeLenses: CodeLens[];
-
 	public checkProcessesInterval: NodeJS.Timeout;
-
 	public isDestroyed: boolean = false;
+
+	//Exported Functions
+	public getFilesystem = getFilesystem;
 
 	get containerName(): string {
 		return 'testcontainer' + this.document.version;
@@ -240,7 +240,7 @@ export class DynamicAnalysis {
 								this.addCodeLens(lastInstructionRange, `${timeDiference.toFixed(3)}s`);
 								this.publishCodeLenses();
 								this.getImageHistory(intermediateImagesIDs);
-								this.getFilesystem(intermediateImagesIDs[0]); // TODO - Remove
+								this.getFilesystem("testimage"); // TODO - Remove
 							}
 						} else if (parsedData["status"]) {
 							this.log("Status", parsedData["status"]);
@@ -261,7 +261,6 @@ export class DynamicAnalysis {
 			});
 		});
 	}
-
 
 	getImageHistory(intermediateImagesIDs: string[]) {
 		this.docker.getImage("testimage").history((err, intermediateLayers) => {
@@ -994,49 +993,6 @@ export class DynamicAnalysis {
 				});
 			});
 		});
-	}
-
-	extractTarStream(stream, entry_callback: Function, finish_callback?: Function){
-		var extract = tar_stream.extract()
- 
-		extract.on('entry', (header, content_stream, next) => {
-			entry_callback(header, content_stream, next);
-			//content_stream.resume() // just auto drain the stream
-		});
-		
-		if(finish_callback)
-			extract.on('finish', ()=>{
-				finish_callback();
-			});
-
-		stream.pipe(extract);
-	}
-
-	getFilesystem(imageID: string){
-		let image = this.docker.getImage(imageID);
-
-		image.get((err,stream) => {
-			if(err){
-				console.log("ERROR");
-			}
-
-			this.extractTarStream(stream, (header : tar_stream.Headers, content_stream: internal.PassThrough, nextLayer: Function) => {
-				if(header.name.match(/\.tar$/)){
-					console.log("Layer: " + header.name);
-					this.extractTarStream(content_stream, (aufs_header : tar_stream.Headers, aufs_stream: internal.PassThrough, nextFile: Function) => {
-						console.log("FILE: " + aufs_header.name);
-						aufs_stream.on('end', () => {
-							nextFile();
-						});
-						aufs_stream.resume();
-					}, () => {
-						nextLayer();
-					})
-				}else{
-					nextLayer();
-				}
-			});
-		})
 	}
 
 	restart(): DynamicAnalysis {
