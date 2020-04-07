@@ -60,11 +60,9 @@ function processLayer(preliminaryFilesystemEntries : PreliminaryFilesystemEntry[
 			let nextSegment = splitPath.shift();
 
 			if(splitPath.length > 0){
-
 				currentCollection = currentCollection[nextSegment].children;
 			}else{
 				currentCollection[nextSegment] = entry.entry;
-				break;
 			}
 		}while(splitPath.length > 0);
 	}
@@ -73,13 +71,36 @@ function processLayer(preliminaryFilesystemEntries : PreliminaryFilesystemEntry[
 }
 
 //b overwrites a
-function mergeLayers(a: FilesystemEntryCollection, b: FilesystemEntryCollection){
-	let collection : FilesystemEntryCollection = {};
+function mergeLayers(a: FilesystemEntryCollection, b: PreliminaryFilesystemEntry[]) : FilesystemEntryCollection{
+	let collection : FilesystemEntryCollection = JSON.parse(JSON.stringify(a));
 
-	function copyEntry(entry: FilesystemEntry, FilesystemEntryCollection){
-		//TODO
+	for(let entry of b){
+		let splitPath = entry.path.split("/").filter((value,_index,_array) => value != null && value.length > 0);
+		let currentCollection = collection;
+
+		do{
+			let nextSegment = splitPath.shift();
+
+			if(splitPath.length > 0){
+				currentCollection = currentCollection[nextSegment].children;
+			}else{
+				if(entry.entry.type == "removal"){
+					delete currentCollection[nextSegment];
+				}else{
+					currentCollection[nextSegment].gid = entry.entry.gid;
+					currentCollection[nextSegment].permissions = entry.entry.permissions;
+					currentCollection[nextSegment].uid = entry.entry.uid;
+					currentCollection[nextSegment].size = entry.entry.size;
+					currentCollection[nextSegment].type = entry.entry.type;
+					if(!currentCollection[nextSegment].children){
+						currentCollection[nextSegment].children = entry.entry.children
+					}
+				}
+			}
+		}while(splitPath.length > 0);
 	}
 
+	return collection;
 }
 
 export function getFilesystem(this: DynamicAnalysis, imageID: string){
