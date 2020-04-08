@@ -49,66 +49,62 @@ function extractTarStream(stream, entry_callback: Function, finish_callback?: Fu
 	stream.pipe(extract);
 }
 
-function processLayer(preliminaryFilesystemEntries : PreliminaryFilesystemEntry[]) : FilesystemEntryCollection{
-	let collection : FilesystemEntryCollection = {};
-
-	for(let entry of preliminaryFilesystemEntries){
-		let splitPath = entry.path.split("/").filter((value,_index,_array) => value != null && value.length > 0);
-		let currentCollection = collection;
-
-		do{
-			let nextSegment = splitPath.shift();
-
-			if(splitPath.length > 0){
-				currentCollection = currentCollection[nextSegment].children;
-			}else{
-				currentCollection[nextSegment] = entry.entry;
-			}
-		}while(splitPath.length > 0);
-	}
-
-	return collection;
-}
-
-//b overwrites a
-function mergeLayers(a: FilesystemEntryCollection, b: PreliminaryFilesystemEntry[]) : FilesystemEntryCollection{
-	let collection : FilesystemEntryCollection = JSON.parse(JSON.stringify(a));
+// Merges two filesystems and returns a filesystem with the resulting merge and a filesystem with just the changes
+// b overwrites a
+// !- TODO - CHECK IF IT WORKS WITH A FOLDER DELETION WITH OTHER FILES INSIDE IT
+function mergeLayers(a : FilesystemEntryCollection, b: PreliminaryFilesystemEntry[]) : [FilesystemEntryCollection, FilesystemEntryCollection] {
+	let mergedCollection : FilesystemEntryCollection;
+	let changesCollection : FilesystemEntryCollection = {};
+	
+	if (a)
+		mergedCollection = JSON.parse(JSON.stringify(a));
+	else
+		mergedCollection = {};
 
 	for(let entry of b){
 		let splitPath = entry.path.split("/").filter((value,_index,_array) => value != null && value.length > 0);
-		let currentCollection = collection;
+		let currentMergedCollection = mergedCollection;
+		let currentChangesCollection = changesCollection;
 
 		do{
 			let nextSegment = splitPath.shift();
 
 			if(splitPath.length > 0){
-				currentCollection = currentCollection[nextSegment].children;
+				currentMergedCollection = currentMergedCollection[nextSegment].children;
+				currentChangesCollection = currentChangesCollection[nextSegment].children;
 			}else{
-				if(entry.entry.type == "removal"){
-					delete currentCollection[nextSegment];
-				}else{
-					currentCollection[nextSegment].gid = entry.entry.gid;
-					currentCollection[nextSegment].permissions = entry.entry.permissions;
-					currentCollection[nextSegment].uid = entry.entry.uid;
-					currentCollection[nextSegment].size = entry.entry.size;
-					currentCollection[nextSegment].type = entry.entry.type;
-					if(!currentCollection[nextSegment].children){
-						currentCollection[nextSegment].children = entry.entry.children
+				if(currentMergedCollection[nextSegment]){
+					if(entry.entry.type == "removal"){
+						delete currentMergedCollection[nextSegment];
+					}else{
+						currentMergedCollection[nextSegment].gid = entry.entry.gid;
+						currentMergedCollection[nextSegment].permissions = entry.entry.permissions;
+						currentMergedCollection[nextSegment].uid = entry.entry.uid;
+						currentMergedCollection[nextSegment].size = entry.entry.size;
+						currentMergedCollection[nextSegment].type = entry.entry.type;
+						if(!currentMergedCollection[nextSegment].children){
+							currentMergedCollection[nextSegment].children = entry.entry.children
+						}
 					}
+				}else{
+					currentMergedCollection[nextSegment] = entry.entry;
 				}
+				
+
+				currentChangesCollection[nextSegment] = entry.entry;
 			}
 		}while(splitPath.length > 0);
 	}
 
-	return collection;
+	return [mergedCollection,changesCollection];
 }
 
 export function getFilesystem(this: DynamicAnalysis, imageID: string){
 	let image = this.docker.getImage(imageID);
 
-	let processedLayers = {};
-
-	let processedLayersCumultive: [];
+	let preliminaryLayers = {}; // {layerID => preliminaryLayer}
+	let processedLayers = []; // [{id: layerID, fs: [mergedFS,changesFS]}]
+	let manifest;
 
 	image.get((err,stream) => {
 		if(err){
@@ -122,21 +118,32 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 				let preliminaryFilesystemEntries : PreliminaryFilesystemEntry[] = [];
 				
 				extractTarStream(content_stream, (aufs_header : tar_stream.Headers, aufs_stream: internal.PassThrough, nextFile: Function) => {
-					preliminaryFilesystemEntries.push({
-						path: aufs_header.name,
-						entry: {
-							type: aufs_header.name.match(/(^|\/)\.wh(?!\.\.wh\.)/) ? "removal" : aufs_header.type, //Regex only matches for .wh.<file> and not for .wh..wh..opq
-							size: aufs_header.size,
-							permissions: aufs_header.mode,
-							uid: aufs_header.uid,
-							gid: aufs_header.gid,
-							children: {}	
-						}
-					});
+					let path = aufs_header.name;
 
+					let removal = false;
+					if(path.match(/(^|\/)\.wh(?!\.\.wh\.)/)){  //Regex only matches for .wh.<file> and not for .wh..wh..opq
+						removal = true;
+						path = path.replace(".wh.","");
+					}
+
+					if(!path.match(/\.wh\.\.wh\./)){ //Matches for for .wh..wh.<file>
+						preliminaryFilesystemEntries.push({
+							path: path,
+							entry: {
+								type: removal ? "removal" : aufs_header.type,
+								size: aufs_header.size,
+								permissions: aufs_header.mode,
+								uid: aufs_header.uid,
+								gid: aufs_header.gid,
+								children: {}	
+							}
+						});
+					}
+					
 					/* aufs_stream.on('data', (data) => {
 						console.log(data.toString());
 					}); */
+
 					aufs_stream.on('end', () => {
 						nextFile();
 					});
@@ -147,12 +154,34 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 						return a.path.split("/").length - b.path.split("/").length;
 					});
 
-					processedLayers[layerName] = processLayer(preliminaryFilesystemEntries);
+					preliminaryLayers[layerName] = preliminaryFilesystemEntries;
 					nextLayer();
 				})
+			}else if(header.name.match(/manifest\.json/)){
+				let manifestBuffers : Buffer[] = [] 
+				content_stream.on('data', (data) => {
+					manifestBuffers.push(data);
+				});
+
+				content_stream.on('end', () => {
+					let manifestBuffer = Buffer.concat(manifestBuffers);
+					manifest = JSON.parse(manifestBuffer.toString());
+					nextLayer();
+				});
 			}else{
 				nextLayer();
 			}
+		}, () => {
+			let orderedLayerIDs = manifest[0].Layers.map((value,_index,_arr) => value.match(/[0-9a-fA-F]+(?=\/)/)[0]);
+			
+			let previousLayer;
+			for (let layerID of orderedLayerIDs){
+				let newProcessedLayers = mergeLayers(previousLayer,preliminaryLayers[layerID]);
+				processedLayers.push({id: layerID, fs: newProcessedLayers});
+				previousLayer = newProcessedLayers[0];
+			}
+
+			console.log(JSON.stringify(processedLayers));
 		});
 	})
 }
