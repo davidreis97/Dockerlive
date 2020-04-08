@@ -1,0 +1,30 @@
+body{
+    font-family: "Ubuntu Mono";
+}
+
+th {
+    align-content: left;
+    background: #89C1B1;
+    color: white;
+    padding: 0.3em;
+}
+
+select {
+    margin-bottom: 1em;
+}
+
+.table-wrapper{
+    padding: 1em;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+td {
+    border-right: none;
+    border-left: none;
+    padding-left: 0.3em;
+    padding-right: 0.3em;
+}

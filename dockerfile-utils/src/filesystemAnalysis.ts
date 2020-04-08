@@ -11,6 +11,11 @@ interface FilesystemEntryCollection{
 	[key: string] : FilesystemEntry
 }
 
+interface ProcessedLayer{
+	id: string,
+	fs: [FilesystemEntryCollection,FilesystemEntryCollection]
+}
+
 interface FilesystemEntry{
 	type : 
 		| 'file'
@@ -103,7 +108,7 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 	let image = this.docker.getImage(imageID);
 
 	let preliminaryLayers = {}; // {layerID => preliminaryLayer}
-	let processedLayers = []; // [{id: layerID, fs: [mergedFS,changesFS]}]
+	let processedLayers : ProcessedLayer[] = [];
 	let manifest;
 
 	image.get((err,stream) => {
