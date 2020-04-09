@@ -53,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.onNotification("dockerlive/filesystemData", (data) => {
 			initialData = data.data;
 			if(filesystemCurrentPanel){
-				filesystemCurrentPanel.webview.postMessage(data);
+				filesystemCurrentPanel.webview.postMessage(data.data);
 			}
 		});
 

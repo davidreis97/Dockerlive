@@ -1,12 +1,12 @@
-body{
-    font-family: "Ubuntu Mono";
-}
-
 th {
     align-content: left;
     background: #89C1B1;
     color: white;
     padding: 0.3em;
+}
+
+.layerPicker{
+    display: flex;
 }
 
 .clickable{
@@ -24,6 +24,7 @@ select {
 table {
     width: 100%;
     border-collapse: collapse;
+    font-size: 15px;
 }
 
 td {

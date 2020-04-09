@@ -41,7 +41,6 @@ export class FilesystemVisualizer {
 				<meta charset="UTF-8">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-				<link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Ubuntu+Mono" />
 				<link rel="stylesheet" type="text/css" href="${css}" />
 
 				<title>Filesystem</title>
@@ -49,8 +48,12 @@ export class FilesystemVisualizer {
 
 			<body>
 			<div class="table-wrapper">
-				<select id="layers" name="layers" onchange="setDisplayerLayer(this.value)">
-				</select>
+				<div class="layerPicker">
+					<select id="layers" name="layers" onchange="setDisplayedLayer(this.value)">
+					</select>
+					<button id="upLayerButton" onclick="upLayer()">Up</button>
+					<button id="downLayerButton" onclick="downLayer()">Down</button>
+				</div>
 				<table id="filetable">
 					<col width="80">
 					<col width="80">
