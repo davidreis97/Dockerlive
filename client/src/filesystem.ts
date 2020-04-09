@@ -55,10 +55,12 @@ export class FilesystemVisualizer {
 					<button id="downLayerButton" onclick="downLayer()">Down</button>
 				</div>
 				<table id="filetable">
+					<col width="10">
 					<col width="80">
 					<col width="80">
 					<col width="80">
 					<tr>
+						<th align="left">C</th>
 						<th align="left">Type</th>
 						<th align="left">Size</th>
 						<th align="left">Permissions</th>

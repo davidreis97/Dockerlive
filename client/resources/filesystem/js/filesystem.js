@@ -4,7 +4,8 @@ let layerDropdown = document.getElementById("layers");
 let upLayerButton = document.getElementById("upLayerButton");
 let downLayerButton = document.getElementById("downLayerButton");
 let firstLayerId;
-let root;
+let rootMerged;
+let rootDiff;
 
 let openFolders = ['/'];
 
@@ -12,7 +13,8 @@ function setDisplayedLayer(layerid){
     hideEntries('/',false);
 	for (let layer of data){
     	if(layer.id == layerid){
-        	root = layer.fs[0];
+            rootMerged = layer.fs[0];
+            rootDiff = layer.fs[1];
         	for(let folder of openFolders){
                 showEntries(folder);
             }
@@ -70,6 +72,8 @@ function update(newData){
 function createEntry(filepath, filename, entry, depth, childrenCount){
 	let tr = document.createElement('tr');
     tr.id = filepath;
+    let changed = document.createElement('td');
+    changed.id = "changed-"+filepath;
 	let type = document.createElement('td');
 	type.innerText = entry.type;
 	let size = document.createElement('td');
@@ -86,7 +90,8 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
         tr.classList.add("clickable");
         size.innerText = childrenCount + " files"
     }
-	name.innerText = nameDepth + filename;
+    name.innerText = nameDepth + filename;
+    tr.appendChild(changed);
 	tr.appendChild(type);
     tr.appendChild(size);
     tr.appendChild(permissions);
@@ -162,12 +167,48 @@ function showEntries(parentPath, registerOpenFolders = true){
     if (registerOpenFolders && !openFolders.includes(parentPath)) 
         openFolders.push(parentPath);
     
-    //highlightChanges();
+    highlightChanges();
+}
+
+function highlightChanges(){
+    let currentPath = [];
+
+    function recursiveCall(obj){
+        for(let [filename, entry] of Object.entries(obj)){
+            let parentPath = "//" + currentPath.join("/");
+            currentPath.push(filename);
+            let currentPathString = "//" + currentPath.join("/");
+    
+            if(entry.type == "removal"){
+                let parentEntry = document.getElementById(parentPath);
+                if(parentEntry && openFolders.includes(parentPath)){
+                    let deletedNode = document.getElementById(currentPathString);
+                    if (!deletedNode){
+                        deletedNode = createEntry(currentPathString, filename, entry, currentPath.length - 1, null);
+                    }
+                    deletedNode.classList.add("deleted");
+                    parentEntry.parentNode.insertBefore(deletedNode, parentEntry.nextSibling);
+                }
+            }
+    
+            let node = document.getElementById("changed-"+currentPathString);
+    
+            if (node){ //If no node then node isn't visible yet
+                node.classList.add("changed-active"); //Mark node as changed
+            } 
+            
+            recursiveCall(entry.children);
+
+            currentPath.pop();
+        }
+    }
+
+    recursiveCall(rootDiff);
 }
 
 function navigateToPath(path){
 	let splitPath = path.split("/").filter((value,_index_arr) => value && value.length > 0);
-    let currentNode = root;
+    let currentNode = rootMerged;
     let depth = 0;
     
     while(splitPath.length > 0){
