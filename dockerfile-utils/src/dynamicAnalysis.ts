@@ -39,6 +39,7 @@ export class DynamicAnalysis {
 	public sendDiagnostics: Function;
 	public sendProgress: Function;
 	public sendPerformanceStats: Function;
+	public sendFilesystemData: Function;
 	public sendCodeLenses: Function;
 	public DA_problems: Map<string, Diagnostic>;
 	public SA_problems: Diagnostic[];
@@ -57,11 +58,12 @@ export class DynamicAnalysis {
 		return 'testcontainer' + this.document.version;
 	}
 
-	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, sendCodeLenses: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
+	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, sendFilesystemData: Function, sendCodeLenses: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
 		this.document = document;
 		this.sendDiagnostics = sendDiagnostics;
 		this.sendProgress = sendProgress;
 		this.sendPerformanceStats = sendPerformanceStats;
+		this.sendFilesystemData = sendFilesystemData;
 		this.sendCodeLenses = sendCodeLenses;
 		this.DA_problems = new Map();
 		this.SA_problems = SA_problems;
@@ -997,7 +999,7 @@ export class DynamicAnalysis {
 
 	restart(): DynamicAnalysis {
 		this.destroy();
-		return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.sendCodeLenses, this.SA_problems, this.dockerfile, this.docker);
+		return new DynamicAnalysis(this.document, this.sendDiagnostics, this.sendProgress, this.sendPerformanceStats, this.sendFilesystemData, this.sendCodeLenses, this.SA_problems, this.dockerfile, this.docker);
 	}
 
 	destroy() {

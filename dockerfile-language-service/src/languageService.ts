@@ -131,8 +131,8 @@ export class LanguageService implements DockerfileLanguageService {
         return dockerSemanticTokens.computeSemanticTokens(content);
     }
 
-    public validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function, settings?: DockerfileUtils.ValidatorSettings): Diagnostic[] {
-        return DockerfileUtils.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendCodeLenses, settings);
+    public validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendFilesystemData ?: Function, sendCodeLenses?: Function, settings?: DockerfileUtils.ValidatorSettings): Diagnostic[] {
+        return DockerfileUtils.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendFilesystemData, sendCodeLenses, settings);
     }
 
     public stopAnalysis() : void{

@@ -144,7 +144,7 @@ export interface DockerfileLanguageService {
 
     currentContainerName(): string;
 
-    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[];
+    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendFilesystemData?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[];
 
     format(content: string, options: FormattingOptions): TextEdit[];
 

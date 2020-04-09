@@ -18,6 +18,7 @@ import { FilesystemVisualizer } from './filesystem';
 let client: LanguageClient;
 let performanceCurrentPanel: vscode.WebviewPanel | undefined;
 let filesystemCurrentPanel: vscode.WebviewPanel | undefined;
+let initialData: any;
 
 export async function activate(context: vscode.ExtensionContext) {
 	let pGraphs = new PerformanceGraphs();
@@ -44,20 +45,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.onNotification("dockerlive/performanceStats", (data) => {
 			let message = pGraphs.update(data);
 
-			if (!performanceCurrentPanel) {
-				return; //No need to update graph if the webview panel doesn't exist / isn't visible
-			} else {
-				performanceCurrentPanel.webview.postMessage(message);
+			if (performanceCurrentPanel) {
+				performanceCurrentPanel.webview.postMessage(message); //No need to update graph if the webview panel doesn't exist / isn't visible
 			}
 		});
 
 		client.onNotification("dockerlive/filesystemData", (data) => {
-			let message = fsViz.update(data);
-
-			if (!filesystemCurrentPanel) {
-				return; //No need to update graph if the webview panel doesn't exist / isn't visible
-			} else {
-				filesystemCurrentPanel.webview.postMessage(message);
+			initialData = data.data;
+			if(filesystemCurrentPanel){
+				filesystemCurrentPanel.webview.postMessage(data);
 			}
 		});
 
@@ -105,9 +101,20 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 
 			filesystemCurrentPanel.onDidDispose((_e) => {
 				filesystemCurrentPanel = null;
-			})
+			});
 
-			filesystemCurrentPanel.webview.html = fsViz.getHTML();
+			const cssPath = vscode.Uri.file(
+				path.join(context.extensionPath, 'client', 'resources', 'filesystem', 'css', 'filesystem.css')
+			);
+
+			const jsPath = vscode.Uri.file(
+				path.join(context.extensionPath, 'client', 'resources', 'filesystem', 'js', 'filesystem.js')
+			);
+
+			filesystemCurrentPanel.webview.html = fsViz.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath,null);
+
+			if(initialData)
+				filesystemCurrentPanel.webview.postMessage(initialData);
 
 			filesystemCurrentPanel.webview.onDidReceiveMessage(
 				message => {

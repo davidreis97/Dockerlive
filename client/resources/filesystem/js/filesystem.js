@@ -1,33 +1,45 @@
-let data = [{"id":"fa4b5b9a709a811f38e10545ee1eddc93c20d7159733783fb699ef1a4d047a6f","fs":[{"a":{"type":"directory","size":0,"permissions":16877,"uid":0,"gid":0,"children":{"b":{"type":"directory","size":0,"permissions":16877,"uid":0,"gid":0,"children":{"c":{"type":"directory","size":0,"permissions":16877,"uid":0,"gid":0,"children":{}}}}}}},{"a":{"type":"directory","size":0,"permissions":16877,"uid":0,"gid":0,"children":{"b":{"type":"directory","size":0,"permissions":16877,"uid":0,"gid":0,"children":{"c":{"type":"directory","size":0,"permissions":16877,"uid":0,"gid":0,"children":{"package.json":{"type":"removal","size":0,"permissions":384,"uid":0,"gid":0,"children":{}}}}}}}}}]}];
+let data = [];
 
 let layerDropdown = document.getElementById("layers");
 let firstLayerId;
 let root;
-for (let layer of data){
-	if (firstLayerId == null){
-    	firstLayerId = layer.id;
-    }
-	let option = document.createElement("option");
-    option.value = layer.id;
-    option.innerHTML = layer.id;
-    layerDropdown.appendChild(option);
-}
 
 function setDisplayedLayer(layerid){
 	for (let layer of data){
     	if(layer.id == layerid){
-        	root = layer.fs[1];
+        	root = layer.fs[0];
         	showEntries("/");
         }
     }
 }
 
-setDisplayedLayer(firstLayerId);
+let initialData = document.getElementById("initialData");
+if (initialData){
+    update(initialData.value);
+}
+
+window.addEventListener('message', event => {
+    update(event.data);
+});
+
+function update(newData){
+    data = newData;
+    for (let layer of data){
+        if (firstLayerId == null){
+            firstLayerId = layer.id;
+        }
+        let option = document.createElement("option");
+        option.value = layer.id;
+        option.innerHTML = layer.id;
+        layerDropdown.appendChild(option);
+    }
+
+    setDisplayedLayer(firstLayerId);
+}
 
 function createEntry(filepath, filename, entry, depth){
 	let tr = document.createElement('tr');
     tr.id = filepath;
-    tr.onclick = (_e) => {showEntries(filepath)}
 	let type = document.createElement('td');
 	type.innerText = entry.type;
 	let size = document.createElement('td');
@@ -39,7 +51,11 @@ function createEntry(filepath, filename, entry, depth){
    	while(depth--){
     	nameDepth += "│";
     }
-	name.innerText = nameDepth + filename;//!- TODO
+    if(entry.type == "directory"){
+        tr.onclick = (_e) => {showEntries(filepath)}
+        tr.classList.add("clickable");
+    }
+	name.innerText = nameDepth + filename;
 	tr.appendChild(type);
     tr.appendChild(size);
     tr.appendChild(permissions);
@@ -62,9 +78,8 @@ function isSubpath(rootPath,edgePath){
 
 function hideEntries(parentPath){
 	let parentElement = document.getElementById(parentPath);
-    parentElement.onclick = (_e) => {showEntries(parentPath)}
+    parentElement.onclick = (_e) => {showEntries(parentPath)};
     let currentElement = parentElement.nextSibling;
-    let filetable = document.getElementById("filetable");
     
     while(currentElement != null){
     	if(!isSubpath(parentPath,currentElement.id)){
@@ -94,7 +109,6 @@ function showEntries(parentPath){
         }
     }
     	
-    let newEntries = [];
     for(let [filename,entry] of Object.entries(parentNode)){
     	addNode(createEntry(parentPath + "/" + filename, filename, entry, depth));
     }

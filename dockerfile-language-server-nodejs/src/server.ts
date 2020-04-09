@@ -339,11 +339,11 @@ function validateTextDocument(textDocument: TextDocument): void {
 	if (configurationSupport) {
 		getConfiguration(textDocument.uri).then((config: ValidatorConfiguration) => {
 			const fileSettings = convertValidatorConfiguration(config);
-			const diagnostics = service.validate(textDocument, sendDiagnostics, _sendProgress, sendPerformanceStats, sendCodeLenses, fileSettings);
+			const diagnostics = service.validate(textDocument, sendDiagnostics, _sendProgress, sendPerformanceStats, sendFilesystemData, sendCodeLenses, fileSettings);
 			sendDiagnostics(textDocument.uri, diagnostics);
 		});
 	} else {
-		const diagnostics = service.validate(textDocument, sendDiagnostics, _sendProgress, sendPerformanceStats, sendCodeLenses, validatorSettings);
+		const diagnostics = service.validate(textDocument, sendDiagnostics, _sendProgress, sendPerformanceStats, sendFilesystemData, sendCodeLenses, validatorSettings);
 		sendDiagnostics(textDocument.uri, diagnostics);
 	}
 }
@@ -395,6 +395,10 @@ function sendDiagnostics(documentURI: string, diagnostics: Diagnostic[]){
 
 function sendPerformanceStats(stats){
 	connection.sendNotification("dockerlive/performanceStats", stats);
+}
+
+function sendFilesystemData(data){
+	connection.sendNotification("dockerlive/filesystemData", {data: data});
 }
 
 connection.onNotification("dockerlive/stop", () => {

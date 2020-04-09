@@ -45,7 +45,7 @@ function extractTarStream(stream, entry_callback: Function, finish_callback?: Fu
 		entry_callback(header, content_stream, next);
 		//content_stream.resume() // just auto drain the stream
 	});
-	
+
 	if(finish_callback)
 		extract.on('finish', ()=>{
 			finish_callback();
@@ -161,7 +161,7 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 
 					preliminaryLayers[layerName] = preliminaryFilesystemEntries;
 					nextLayer();
-				})
+				});
 			}else if(header.name.match(/manifest\.json/)){
 				let manifestBuffers : Buffer[] = [] 
 				content_stream.on('data', (data) => {
@@ -185,8 +185,7 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 				processedLayers.push({id: layerID, fs: newProcessedLayers});
 				previousLayer = newProcessedLayers[0];
 			}
-
-			console.log(JSON.stringify(processedLayers));
+			this.sendFilesystemData(processedLayers);
 		});
 	})
 }

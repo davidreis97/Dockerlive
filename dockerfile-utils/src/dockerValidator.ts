@@ -221,7 +221,7 @@ export class Validator {
         }
     }
 
-    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendCodeLenses?: Function): Diagnostic[] {
+    validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendFilesystemData ?: Function, sendCodeLenses?: Function): Diagnostic[] {
         this.document = document;
         let problems: Diagnostic[] = [];
         let dockerfile = DockerfileParser.parse(document.getText());
@@ -347,7 +347,7 @@ export class Validator {
                 if (this.dynamicAnalysis) {
                     this.dynamicAnalysis.destroy();
                 }
-                this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendCodeLenses, problems, dockerfile, this.docker);
+                this.dynamicAnalysis = new DynamicAnalysis(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendFilesystemData, sendCodeLenses, problems, dockerfile, this.docker);
             }
         }
 

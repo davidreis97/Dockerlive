@@ -20,7 +20,8 @@
 	},
 	"activationEvents": [
 		"onLanguage:dockerfile",
-		"onCommand:dockerlive.showPerformance"
+		"onCommand:dockerlive.showPerformance",
+		"onCommand:dockerlive.showFilesystem"
 	],
 	"main": "./client/out/extension",
 	"contributes": {
@@ -28,6 +29,15 @@
 			{
 				"command": "dockerlive.showPerformance",
 				"title": "Display Performance of Test Container",
+				"category": "Dockerlive",
+				"icon": {
+					"light": "./resources/light.svg",
+					"dark": "./resources/dark.svg"
+				}
+			},
+			{
+				"command": "dockerlive.showFilesystem",
+				"title": "Display Filesystem of Test Container",
 				"category": "Dockerlive",
 				"icon": {
 					"light": "./resources/light.svg",
@@ -55,6 +65,11 @@
 				{
 					"when": "resourceLangId == dockerfile",
 					"command": "dockerlive.showPerformance",
+					"group": "navigation"
+				},
+				{
+					"when": "resourceLangId == dockerfile",
+					"command": "dockerlive.showFilesystem",
 					"group": "navigation"
 				}
 			]
