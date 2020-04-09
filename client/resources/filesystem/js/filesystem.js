@@ -20,6 +20,8 @@ function setDisplayedLayer(layerid){
             }
         }
     }
+
+    updateButtons();
 }
 
 function updateButtons(){
@@ -38,13 +40,11 @@ function updateButtons(){
 
 function upLayer(){
     layerDropdown.selectedIndex--;
-    updateButtons();
     layerDropdown.dispatchEvent(new Event("change"));
 }
 
 function downLayer(){
     layerDropdown.selectedIndex++;
-    updateButtons();
     layerDropdown.dispatchEvent(new Event("change"));
 }
 
