@@ -53,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.onNotification("dockerlive/filesystemData", (data) => {
 			initialData = data.data;
 			if(filesystemCurrentPanel){
-				filesystemCurrentPanel.webview.postMessage(data.data);
+				sendPartitionedFilesystemData(data.data);
 			}
 		});
 
@@ -76,6 +76,17 @@ export async function activate(context: vscode.ExtensionContext) {
 			codeLensProvider.didChangeCodeLenses(data.codeLenses);
 		})
 	});
+}
+
+function sendPartitionedFilesystemData(data){
+	let data_string = JSON.stringify(data);
+	let index = 0;
+	const chunk_size = 1024*256;
+	while(index < data_string.length){
+		filesystemCurrentPanel.webview.postMessage({chunk:data_string.slice(index,index+chunk_size)});
+		index += chunk_size;
+	}
+	filesystemCurrentPanel.webview.postMessage({finished:true});
 }
 
 async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsViz: FilesystemVisualizer) {
@@ -113,8 +124,9 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 
 			filesystemCurrentPanel.webview.html = fsViz.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath,null);
 
-			if(initialData)
-				filesystemCurrentPanel.webview.postMessage(initialData);
+			if(initialData){
+				sendPartitionedFilesystemData(initialData);
+			}
 
 			filesystemCurrentPanel.webview.onDidReceiveMessage(
 				message => {

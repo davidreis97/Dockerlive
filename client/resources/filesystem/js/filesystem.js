@@ -3,7 +3,6 @@ let data = [];
 let layerDropdown = document.getElementById("layers");
 let upLayerButton = document.getElementById("upLayerButton");
 let downLayerButton = document.getElementById("downLayerButton");
-let firstLayerId;
 let rootMerged;
 let rootDiff;
 
@@ -23,6 +22,41 @@ function setDisplayedLayer(layerid){
 
     updateButtons();
 }
+
+function update(newData){
+    let currentLayerId = layerDropdown.value;
+    let currentIndex = layerDropdown.selectedIndex >= 0 ? layerDropdown.selectedIndex : 0;
+
+    data = newData;
+
+    let foundCurrentLayer = false;
+
+    layerDropdown.innerHTML = '';
+
+    for (let layer of data){
+        if(layer.id == currentLayerId){
+            foundCurrentLayer = true;
+        }
+        let option = document.createElement("option");
+        option.id = layer.id;
+        option.value = layer.id;
+        option.innerHTML = layer.id;
+        layerDropdown.appendChild(option);
+    }
+
+    let newLayerId;
+
+    if(foundCurrentLayer){ //Attempt to remain in the same layer
+        newLayerId = currentLayerId;
+    }else if(currentIndex < data.length){ //Attempt to remain in a new layer with the same index
+        newLayerId = data[currentIndex].id;
+    }else{ //If all fails show last layer
+        newLayerId = data[data.length-1].id; 
+    }
+    
+    setDisplayedLayer(newLayerId);
+}
+
 
 function updateButtons(){
     if(layerDropdown.selectedIndex <= 0){
@@ -48,26 +82,14 @@ function downLayer(){
     layerDropdown.dispatchEvent(new Event("change"));
 }
 
+let chunks = [];
 window.addEventListener('message', event => {
-    update(event.data);
-});
-
-function update(newData){
-    data = newData;
-    for (let layer of data){
-        if (firstLayerId == null){
-            firstLayerId = layer.id;
-        }
-        let option = document.createElement("option");
-        option.value = layer.id;
-        option.innerHTML = layer.id;
-        layerDropdown.appendChild(option);
+    if(event.data.finished){
+        update(JSON.parse(chunks.join("")));
+    }else{
+        chunks.push(event.data.chunk);
     }
-    
-    updateButtons();
-
-    setDisplayedLayer(firstLayerId);
-}
+});
 
 function createEntry(filepath, filename, entry, depth, childrenCount){
 	let tr = document.createElement('tr');
@@ -88,7 +110,11 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
     if(entry.type == "directory"){
         tr.onclick = (_e) => {showEntries(filepath)}
         tr.classList.add("clickable");
-        size.innerText = childrenCount + " files"
+        if(childrenCount == 1){
+            size.innerText = childrenCount + " item"
+        }else if(childrenCount > 1){
+            size.innerText = childrenCount + " items"
+        }
     }
     name.innerText = nameDepth + filename;
     tr.appendChild(changed);
