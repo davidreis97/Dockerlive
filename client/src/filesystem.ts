@@ -64,7 +64,7 @@ export class FilesystemVisualizer {
 						<th align="left">C</th>
 						<th align="left">Type</th>
 						<th align="left">Size</th>
-						<th align="left">Permissions</th>
+						<th align="left">Mode</th>
 						<th align="left">Name</th>
 					</tr>
 				</table>

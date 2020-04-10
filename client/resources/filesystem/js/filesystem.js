@@ -103,7 +103,8 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
 	size.innerText = processSize(entry.size);
 	let permissions = document.createElement('td');
 	permissions.innerText = entry.permissions;
-	let name = document.createElement('td');
+    let name = document.createElement('td');
+    name.id = "name-"+filepath;
     let nameDepth = ""
    	while(depth--){
     	nameDepth += " │ ";
@@ -115,6 +116,12 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
             size.innerText = childrenCount + " item"
         }else if(childrenCount > 1){
             size.innerText = childrenCount + " items"
+        }
+
+        if(openFolders.includes(filepath)){
+            nameDepth += "⯆";
+        }else{
+            nameDepth += "⯈";
         }
     }
     name.innerText = nameDepth + filename;
@@ -160,6 +167,11 @@ function hideEntries(parentPath, registerOpenFolders = true){
         currentElement = nextElement;
     }
 
+    let folderName = document.getElementById("name-"+parentPath);
+    if(folderName){
+        folderName.innerText = folderName.innerText.replace("⯆","⯈");
+    }
+
     if(registerOpenFolders){
         openFolders = openFolders.filter((folder,_index,_arr) => !(folder == parentPath || isSubpath(parentPath,folder)));
     }
@@ -191,8 +203,14 @@ function showEntries(parentPath, registerOpenFolders = true){
     	addNode(createEntry(parentPath + "/" + filename, filename, entry, depth, childrenCount));
     }
 
-    if (registerOpenFolders && !openFolders.includes(parentPath)) 
+    let folderName = document.getElementById("name-"+parentPath);
+    if(folderName){
+        folderName.innerText = folderName.innerText.replace("⯈","⯆");
+    }
+
+    if (registerOpenFolders && !openFolders.includes(parentPath)){
         openFolders.push(parentPath);
+    }
     
     highlightChanges();
 }
