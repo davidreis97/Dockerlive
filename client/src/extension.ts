@@ -42,6 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	initializeFilesystemWebview(context, fsViz);
 	initializeLanguageServer(context).then((_client: LanguageClient) => {
 		client = _client;
+		client.outputChannel.show();
 		client.onNotification("dockerlive/performanceStats", (data) => {
 			let message = pGraphs.update(data);
 
