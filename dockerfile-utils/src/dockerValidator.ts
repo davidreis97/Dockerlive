@@ -323,12 +323,20 @@ export class Validator {
                 problems.push(Validator.createNoSourceImage(range.start, range.end));
                 hasFrom = true;
             }
-            this.validateInstruction(document, escapeChar, instruction, keyword, false, problems);
-            this.checkVariables(instruction, problems);
+            try{
+                this.validateInstruction(document, escapeChar, instruction, keyword, false, problems);
+                this.checkVariables(instruction, problems);
+            }catch(e){
+                //console.log(e);
+            }
         }
 
         for (let instruction of dockerfile.getOnbuildTriggers()) {
-            this.validateInstruction(document, escapeChar, instruction, instruction.getKeyword(), true, problems);
+            try{
+                this.validateInstruction(document, escapeChar, instruction, instruction.getKeyword(), true, problems);
+            }catch(e){
+                //console.log(e);
+            }
         }
 
         let foundError = false;
