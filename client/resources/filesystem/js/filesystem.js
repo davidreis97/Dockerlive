@@ -40,7 +40,7 @@ function update(newData){
         let option = document.createElement("option");
         option.id = layer.id;
         option.value = layer.id;
-        option.innerHTML = layer.id;
+        option.innerHTML = layer.id.slice(0,12);
         layerDropdown.appendChild(option);
     }
 
@@ -86,6 +86,7 @@ let chunks = [];
 window.addEventListener('message', event => {
     if(event.data.finished){
         update(JSON.parse(chunks.join("")));
+        chunks = [];
     }else{
         chunks.push(event.data.chunk);
     }

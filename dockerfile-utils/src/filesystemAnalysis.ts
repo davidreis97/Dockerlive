@@ -111,9 +111,17 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 	let processedLayers : ProcessedLayer[] = [];
 	let manifest;
 
+	if (this.isDestroyed) {
+		return;
+	}
+
 	image.get((err,stream) => {
 		if(err){
 			console.log("ERROR");
+		}
+
+		if (this.isDestroyed) {
+			return;
 		}
 
 		extractTarStream(stream, (header : tar_stream.Headers, content_stream: internal.PassThrough, nextLayer: Function) => {
@@ -121,7 +129,7 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 			if(layer){
 				let layerName = layer[0];
 				let preliminaryFilesystemEntries : PreliminaryFilesystemEntry[] = [];
-				
+
 				extractTarStream(content_stream, (aufs_header : tar_stream.Headers, aufs_stream: internal.PassThrough, nextFile: Function) => {
 					let path = aufs_header.name;
 
@@ -185,6 +193,11 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 				processedLayers.push({id: layerID, fs: newProcessedLayers});
 				previousLayer = newProcessedLayers[0];
 			}
+
+			if (this.isDestroyed) {
+				return;
+			}
+			
 			this.sendFilesystemData(processedLayers);
 		});
 	})

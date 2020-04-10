@@ -49,6 +49,7 @@ export class FilesystemVisualizer {
 			<body>
 			<div class="table-wrapper">
 				<div class="layerPicker">
+					<p id="layerLabel">Layer ID:</p>
 					<select id="layers" name="layers" onchange="setDisplayedLayer(this.value)">
 					</select>
 					<button id="upLayerButton" onclick="upLayer()">Up</button>

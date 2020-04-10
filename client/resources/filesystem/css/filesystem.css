@@ -5,8 +5,25 @@ th {
     padding: 0.3em;
 }
 
+#downLayerButton, #upLayerButton{
+    width: 50px;
+    height: 30px;
+    margin-right: 0.3em;
+}
+
+select {
+    margin-right: 1em;
+}
+
+#layerLabel{
+    margin: 0;
+    margin-right: 0.4em;
+}
+
 .layerPicker{
+    align-items: center;
     display: flex;
+    margin-bottom: 0.4em;
 }
 
 .changed-active{
@@ -19,10 +36,6 @@ th {
 
 .clickable{
     cursor: pointer;
-}
-
-select {
-    margin-bottom: 1em;
 }
 
 .table-wrapper{
