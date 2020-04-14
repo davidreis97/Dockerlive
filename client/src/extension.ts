@@ -111,6 +111,12 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 				filesystemCurrentPanel.reveal();
 			}
 
+			filesystemCurrentPanel.onDidChangeViewState((e) => {
+				if(e.webviewPanel.visible){
+					sendPartitionedFilesystemData(initialData);
+				}
+			})
+
 			filesystemCurrentPanel.onDidDispose((_e) => {
 				filesystemCurrentPanel = null;
 			});
@@ -123,7 +129,7 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 				path.join(context.extensionPath, 'client', 'resources', 'filesystem', 'js', 'filesystem.js')
 			);
 
-			filesystemCurrentPanel.webview.html = fsViz.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath,null);
+			filesystemCurrentPanel.webview.html = fsViz.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath);
 
 			if(initialData){
 				sendPartitionedFilesystemData(initialData);

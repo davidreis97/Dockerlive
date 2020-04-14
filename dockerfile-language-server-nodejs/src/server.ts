@@ -385,7 +385,8 @@ function sendCodeLenses(codeLenses: CodeLens[]){
 
 function sendDiagnostics(documentURI: string, diagnostics: Diagnostic[]){
 	if(!diagnostics){
-		diagnostics = [];
+		return;
+		//diagnostics = [];
 	}
 	if(!documentURI){
 		return;

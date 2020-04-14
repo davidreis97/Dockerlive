@@ -1,38 +1,6 @@
-interface ProcessedLayer {
-	id: string,
-	fs: [FilesystemEntryCollection, FilesystemEntryCollection]
-}
 
-interface FilesystemEntryCollection {
-	[key: string]: FilesystemEntry
-}
-
-interface FilesystemEntry {
-	type:
-	| 'file'
-	| 'link'
-	| 'symlink'
-	| 'character-device'
-	| 'block-device'
-	| 'directory'
-	| 'fifo'
-	| 'contiguous-file'
-	| 'pax-header'
-	| 'pax-global-header'
-	| 'gnu-long-link-path'
-	| 'gnu-long-path'
-	| 'removal', //Special for .wh files which mark the deletion of files in the union FS
-	permissions: number,
-	uid: number,
-	gid: number,
-	size: number
-	children: FilesystemEntryCollection
-}
-
-// !- TODO change font dependency to local dependency
-// !- TODO connect css and js
 export class FilesystemVisualizer {
-	getHTML(css,js,font) {
+	getHTML(css,js) {
 		return /*html*/`
 			<!DOCTYPE html>
 			<html lang="en">
