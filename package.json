@@ -33,8 +33,8 @@
 				"title": "Display Performance of Test Container",
 				"category": "Dockerlive",
 				"icon": {
-					"light": "./resources/light.svg",
-					"dark": "./resources/dark.svg"
+					"light": "./resources/icons/cpu/cpuLight.svg",
+					"dark": "./resources/icons/cpu/cpuDark.svg"
 				}
 			},
 			{
@@ -42,8 +42,8 @@
 				"title": "Display Filesystem of Test Container",
 				"category": "Dockerlive",
 				"icon": {
-					"light": "./resources/light.svg",
-					"dark": "./resources/dark.svg"
+					"light": "./resources/icons/fs/fsLight.svg",
+					"dark": "./resources/icons/fs/fsDark.svg"
 				}
 			},
 			{
