@@ -1,9 +1,11 @@
 {
 	"name": "dockerlive",
+	"displayName": "Dockerlive",
+	"preview": true,
 	"description": "Live Programming environment for Dockerfiles",
 	"author": "David Reis",
 	"license": "MIT",
-	"version": "1.0.10",
+	"version": "1.0.11",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/davidreis97/Dockerlive.git"
