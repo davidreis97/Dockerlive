@@ -31,3 +31,7 @@ Feedback generated:
 - Explore each layer's filesystem (highlighting the changes of each layer)
 - Service discovery (with Nmap)
 
+## CREDITS
+
+- [Docker Icon](https://iconscout.com/icons/docker) by [Icons8](https://iconscout.com/contributors/icons8) on [Iconscout](Iconscout)
+- [Arrow Icon](https://iconscout.com/icons/arrow) by [Mohit Gandhi](https://iconscout.com/contributors/mcgandhi61) on [Iconscout](Iconscout)
