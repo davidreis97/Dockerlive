@@ -40,7 +40,7 @@ function update(newData){
         let option = document.createElement("option");
         option.id = layer.id;
         option.value = layer.id;
-        option.innerHTML = layer.id.slice(0,12);
+        option.innerHTML = layer.id.slice(0,12) + " - " + processSize(layer.size);
         layerDropdown.appendChild(option);
     }
 
