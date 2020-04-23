@@ -102,7 +102,7 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
 	let size = document.createElement('td');
 	size.innerText = processSize(entry.size);
 	let permissions = document.createElement('td');
-	permissions.innerText = entry.permissions;
+	permissions.innerText = entry.permissions.stringRep;
     let name = document.createElement('td');
     name.id = "name-"+filepath;
     let nameDepth = ""

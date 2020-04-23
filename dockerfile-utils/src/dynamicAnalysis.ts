@@ -14,7 +14,6 @@ import child_process from 'child_process';
 import xml2js from 'xml2js';
 import { table } from 'table';
 import { getFilesystem } from './filesystemAnalysis';
-
 var stripAnsi = require("strip-ansi");
 
 export const DEBUG = false;

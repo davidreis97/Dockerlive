@@ -32,11 +32,25 @@ interface FilesystemEntry{
 		| 'gnu-long-link-path'
 		| 'gnu-long-path'
 		| 'removal', //Special for .wh files which mark the deletion of files in the union FS
-	permissions : number,
+	permissions : PermissionObject,
 	uid : number,
 	gid : number,
 	size : number
 	children : FilesystemEntryCollection
+}
+
+interface Permissions{
+	read: boolean,
+	write: boolean,
+	execute: boolean
+}
+
+interface PermissionObject{
+	stringRep: string,
+	octalRep: string,
+	owner: Permissions,
+	group: Permissions,
+	other: Permissions
 }
 
 function extractTarStream(stream, entry_callback: Function, finish_callback?: Function){
@@ -107,6 +121,45 @@ function mergeLayers(a : FilesystemEntryCollection, b: PreliminaryFilesystemEntr
 	return [mergedCollection,changesCollection,layerSize];
 }
 
+function parseDecimalPermissions(decimal: number) : PermissionObject{
+	let binaryRep = decimal.toString(2).slice(-9);
+
+	let stringRep = "";
+	for(let i = 0; i < binaryRep.length; i++){
+		if(binaryRep[i] == "0"){
+			stringRep += "-";
+		}else{
+			if(i%3 == 0){
+				stringRep += "r";
+			}else if(i%3 == 1){
+				stringRep += "w";
+			}else if(i%3 == 2){
+				stringRep += "x";
+			}
+		}
+	}
+
+	return {
+		octalRep: decimal.toString(8).slice(-3),
+		stringRep: stringRep,
+		owner: {
+			read: binaryRep[0] == "1", 
+			write: binaryRep[1] == "1",
+			execute: binaryRep[2] == "1"
+		},
+		group: {
+			read: binaryRep[3] == "1", 
+			write: binaryRep[4] == "1",
+			execute: binaryRep[5] == "1"
+		},
+		other: {
+			read: binaryRep[6] == "1", 
+			write: binaryRep[7] == "1",
+			execute: binaryRep[8] == "1"
+		}
+	};
+}
+
 export function getFilesystem(this: DynamicAnalysis, imageID: string){
 	let image = this.docker.getImage(imageID);
 
@@ -148,7 +201,7 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 							entry: {
 								type: removal ? "removal" : aufs_header.type,
 								size: aufs_header.size,
-								permissions: aufs_header.mode,
+								permissions: parseDecimalPermissions(aufs_header.mode),
 								uid: aufs_header.uid,
 								gid: aufs_header.gid,
 								children: {}	
