@@ -1,4 +1,4 @@
-th {
+#filetable th {
     align-content: left;
     background: #89C1B1;
     color: white;
@@ -42,15 +42,27 @@ select {
     padding: 1em;
 }
 
-table {
+table#filetable {
     width: 100%;
     border-collapse: collapse;
     font-size: 15px;
 }
 
-td {
+#filetable td {
     border-right: none;
     border-left: none;
     padding-left: 0.3em;
     padding-right: 0.3em;
+}
+
+.permission-overlay{
+    position: absolute;
+    background-color: var(--vscode-editorHoverWidget-background);
+    border-color: var(--vscode-editorHoverWidget-border);
+    border-style: solid;
+    border-width: 0.1em;
+}
+
+.permission-string{
+    text-decoration: dotted;
 }

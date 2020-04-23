@@ -3,6 +3,7 @@ let data = [];
 let layerDropdown = document.getElementById("layers");
 let upLayerButton = document.getElementById("upLayerButton");
 let downLayerButton = document.getElementById("downLayerButton");
+let body = document.getElementsByTagName("body")[0];
 let rootMerged;
 let rootDiff;
 
@@ -92,6 +93,56 @@ window.addEventListener('message', event => {
     }
 });
 
+function generatePermissionTD(allowed){
+    let allowedColor = "rgb(50, 170, 50)";
+    let disallowedColor = "rgb(170, 50, 50)";
+    return `<td style="color:white; text-align:center; background-color:${allowed? allowedColor : disallowedColor}">${allowed ? "Yes" : "No"}</td>`
+}
+
+function renderPermissions(event, permissions, filepath){
+    let permOverlay = document.createElement('div');
+    permOverlay.classList.add("permission-overlay");
+    permOverlay.id = "permOverlay-"+filepath;
+    permOverlay.style.top = event.y - 20 + "px";
+    permOverlay.style.left = event.x + 20 + "px";
+    permOverlay.innerHTML = `
+    <table>
+        <tr>
+            <th></th>
+            <th>Owner</th>
+            <th>Group</th>
+            <th>Other</th>
+        </tr>
+        <tr>
+            <th style="text-align:left">Read</th>
+            ${generatePermissionTD(permissions.owner.read)}
+            ${generatePermissionTD(permissions.group.read)}
+            ${generatePermissionTD(permissions.other.read)}
+        </tr>
+        <tr>
+            <th style="text-align:left">Write</th>
+            ${generatePermissionTD(permissions.owner.write)}
+            ${generatePermissionTD(permissions.group.write)}
+            ${generatePermissionTD(permissions.other.write)}
+        </tr>
+        <tr>
+            <th style="text-align:left">Exec</th>
+            ${generatePermissionTD(permissions.owner.execute)}
+            ${generatePermissionTD(permissions.group.execute)}
+            ${generatePermissionTD(permissions.other.execute)}
+        </tr>
+    </table>
+    `;
+    body.appendChild(permOverlay);
+}
+
+function hidePermissions(filepath){
+    let permOverlay = document.getElementById("permOverlay-"+filepath);
+    if(permOverlay){
+        permOverlay.parentNode.removeChild(permOverlay);
+    }
+}
+
 function createEntry(filepath, filename, entry, depth, childrenCount){
 	let tr = document.createElement('tr');
     tr.id = filepath;
@@ -102,7 +153,14 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
 	let size = document.createElement('td');
 	size.innerText = processSize(entry.size);
 	let permissions = document.createElement('td');
-	permissions.innerText = entry.permissions.stringRep;
+    permissions.innerText = entry.permissions.stringRep;
+    permissions.onmouseover = (e) => {
+        renderPermissions(e, entry.permissions, filepath);
+    }
+    permissions.onmouseout = (_e) => {
+        hidePermissions(filepath);
+    }
+    permissions.classList.add("permission-string");
     let name = document.createElement('td');
     name.id = "name-"+filepath;
     let nameDepth = ""
