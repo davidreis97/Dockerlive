@@ -49,15 +49,18 @@ export class DynamicAnalysis {
 	public codeLenses: CodeLens[];
 	public checkProcessesInterval: NodeJS.Timeout;
 	public isDestroyed: boolean = false;
+	public analysisID: number;
 
 	//Exported Functions
 	public getFilesystem = getFilesystem;
 
 	get containerName(): string {
-		return 'testcontainer' + this.document.version;
+		return 'testcontainer' + this.analysisID;
 	}
 
 	constructor(document: TextDocument, sendDiagnostics: Function, sendProgress: Function, sendPerformanceStats: Function, sendFilesystemData: Function, sendCodeLenses: Function, SA_problems: Diagnostic[], dockerfile: Dockerfile, docker: Dockerode) {
+		this.analysisID = Math.floor(Math.random() * Math.floor(100000000000));
+
 		this.document = document;
 		this.sendDiagnostics = sendDiagnostics;
 		this.sendProgress = sendProgress;
