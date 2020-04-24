@@ -119,6 +119,7 @@ let memoryChart = new Chart(memoryCanvas, {
 	}
 });
 
+/*
 let storageCanvas = document.getElementById('storage').getContext('2d');
 let storageChart = new Chart(storageCanvas, {
 	type: 'line',
@@ -183,7 +184,7 @@ let storageChart = new Chart(storageCanvas, {
 			}]
 		}
 	}
-});
+});*/
 
 let networkCharts = {};
 
@@ -296,13 +297,14 @@ window.addEventListener('message', event => {
 			canvas.parentNode.parentNode.removeChild(canvas.parentNode); //Remove the parent div of the canvas
 		}
 	}
-
+	/*
 	if (storageChart.data.labels.length == 0) {
 		storageChart.data.labels = message.storage.readBytes.map((_val, index, _arr) => message.storage.readBytes.length - index);
 	}
 	storageChart.data.datasets[0].data = message.storage.readBytes;
 	storageChart.data.datasets[1].data = message.storage.writeBytes;
 	storageChart.update(0);
+	*/
 });
 
 function getColor(attribute) {

@@ -20,6 +20,21 @@ export class PerformanceGraphs {
 		this.clearGraphs();
 	}
 
+	getCurrent(){
+		return {
+			cpu: this.cpuPercentages,
+			memory: {
+				usage: this.memoryUsages,
+				limit: this.maxMemory
+			},
+			networks: this.networks,
+			storage: {
+				readBytes: this.readBytes,
+				writeBytes: this.writeBytes
+			}
+		};
+	}
+
 	update(data) {
 		if (this.nextDataIsFromNewContainer) { //Clear the previous data when a new container starts running but leave the data intact when the container stops without a new one coming in
 			this.clearGraphs();
@@ -113,9 +128,9 @@ export class PerformanceGraphs {
 					<!-- Canvas initialized in Javascript -->
 				</div>
 
-				<div id="storageDiv">
+				<!--<div id="storageDiv">
 					<canvas id="storage"></canvas>
-				</div>
+				</div>-->
 				
 				<script src="${chartjs}"></script>
 				<script src="${js}"> </script>
