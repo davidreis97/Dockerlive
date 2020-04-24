@@ -197,6 +197,14 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 
 			performanceCurrentPanel.webview.html = pGraphs.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath,"vscode-resource:"+chartjsPath.fsPath);
 
+			performanceCurrentPanel.webview.postMessage(pGraphs.getCurrent());
+
+			performanceCurrentPanel.onDidChangeViewState((e) => {
+				if(e.webviewPanel.visible){
+					performanceCurrentPanel.webview.postMessage(pGraphs.getCurrent());
+				}
+			})
+
 			performanceCurrentPanel.webview.onDidReceiveMessage(
 				message => {
 					switch (message.command) {
