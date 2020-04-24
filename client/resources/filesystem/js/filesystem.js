@@ -161,6 +161,10 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
         hidePermissions(filepath);
     }
     permissions.classList.add("permission-string");
+    let uid = document.createElement('td');
+    uid.innerText = entry.uid;
+    let gid = document.createElement('td');
+	gid.innerText = entry.gid;
     let name = document.createElement('td');
     name.id = "name-"+filepath;
     let nameDepth = ""
@@ -187,6 +191,8 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
 	tr.appendChild(type);
     tr.appendChild(size);
     tr.appendChild(permissions);
+    tr.appendChild(uid);
+    tr.appendChild(gid);
     tr.appendChild(name);
 	return tr;
 }

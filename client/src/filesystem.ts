@@ -27,11 +27,15 @@ export class FilesystemVisualizer {
 					<col width="80">
 					<col width="80">
 					<col width="80">
+					<col width="10">
+					<col width="10">
 					<tr>
 						<th align="left">C</th>
 						<th align="left">Type</th>
 						<th align="left">Size</th>
 						<th align="left">Mode</th>
+						<th align="left">UID</th>
+						<th align="left">GID</th>
 						<th align="left">Name</th>
 					</tr>
 				</table>
