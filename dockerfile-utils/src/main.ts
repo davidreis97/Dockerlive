@@ -187,12 +187,18 @@ export function format(content: string, options: FormattingOptions): TextEdit[] 
     return formatter.formatDocument(document, options);
 }
 
-const validator = new Validator();
+let validator = new Validator();
+let lastDocumentUri: string;
 
 /**
  * Validates the Dockerfile that is contained in the given string.
  */
 export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendFilesystemData ?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[] {
+    if(lastDocumentUri && document.uri !== lastDocumentUri){
+        validator = new Validator();
+    }
+    
+    lastDocumentUri = document.uri;
     validator.setSettings(settings);
     return validator.validate(document, sendDiagnostics, sendProgress, sendPerformanceStats, sendFilesystemData, sendCodeLenses);
 }
