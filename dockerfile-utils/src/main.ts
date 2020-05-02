@@ -211,6 +211,10 @@ export function restartAnalysis(){
     validator.restartAnalysis();
 }
 
+export function toggleAnalysis(){
+    validator.toggleAnalysis();
+}
+
 export function currentContainerName() : string{
     return validator.currentContainerName;
 }

@@ -6,7 +6,7 @@
 	"description": "Live Programming environment for Dockerfiles",
 	"author": "David Reis",
 	"license": "MIT",
-	"version": "1.0.13",
+	"version": "1.0.14",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/davidreis97/Dockerlive.git"
@@ -48,6 +48,15 @@
 				}
 			},
 			{
+				"command": "dockerlive.toggle",
+				"title": "Toggle Dynamic Analysis",
+				"category": "Dockerlive",
+				"icon": {
+					"light": "./resources/icons/toggle/toggleLight.svg",
+					"dark": "./resources/icons/toggle/toggleDark.svg"
+				}
+			},
+			{
 				"command": "dockerlive.stop",
 				"category": "Dockerlive",
 				"title": "Stop the test container and dynamic analysis"
@@ -73,6 +82,11 @@
 				{
 					"when": "resourceLangId == dockerfile",
 					"command": "dockerlive.showFilesystem",
+					"group": "navigation"
+				},
+				{
+					"when": "resourceLangId == dockerfile",
+					"command": "dockerlive.toggle",
 					"group": "navigation"
 				}
 			]

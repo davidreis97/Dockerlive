@@ -37,6 +37,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		client.sendNotification("dockerlive/getContainerName");
 	});
 
+	vscode.commands.registerCommand('dockerlive.toggle', () => {
+		client.sendNotification("dockerlive/toggle");
+	});
+
 	let codeLensProvider = new DockerfileCodeLensProvider();
 
 	initializePerformanceWebview(context, pGraphs);

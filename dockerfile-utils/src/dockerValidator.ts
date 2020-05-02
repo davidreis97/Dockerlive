@@ -51,12 +51,26 @@ export class Validator {
 
     private dynamicAnalysis: DynamicAnalysis;
 
+    private dynAnalEnabled : boolean = true;
+
     constructor(settings?: ValidatorSettings) {
         if (settings) {
             this.settings = settings;
         }
 
         this.docker = new Dockerode();
+    }
+
+    public toggleAnalysis(){
+        this.dynAnalEnabled = !this.dynAnalEnabled;
+        if(this.dynAnalEnabled){
+            console.log("ENABLED ANALYSIS - Change the document to trigger an analysis");
+        }else{
+            console.log("DISABLED ANALYSIS");
+            if(this.dynamicAnalysis){
+                this.dynamicAnalysis.destroy();
+            }
+        }
     }
 
     public setSettings(settings: ValidatorSettings) {
@@ -348,7 +362,7 @@ export class Validator {
             }
         }
 
-        if (!foundError) {
+        if (!foundError && this.dynAnalEnabled) {
             if (this.dynamicAnalysis && (this.dynamicAnalysis.document.version > document.version)) {
                 return;
             } else {

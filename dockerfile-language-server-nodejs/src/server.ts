@@ -403,6 +403,10 @@ function sendFilesystemData(data){
 	connection.sendNotification("dockerlive/filesystemData", {data: data});
 }
 
+connection.onNotification("dockerlive/toggle", () => {
+	service.toggleAnalysis();
+});
+
 connection.onNotification("dockerlive/stop", () => {
 	service.stopAnalysis();
 });

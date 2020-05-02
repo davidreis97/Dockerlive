@@ -142,6 +142,8 @@ export interface DockerfileLanguageService {
 
     restartAnalysis(): void;
 
+    toggleAnalysis(): void;
+
     currentContainerName(): string;
 
     validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendFilesystemData?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[];
