@@ -375,10 +375,11 @@ function endProgress(token: string, message?: string){
 	});
 }
 
-function sendCodeLenses(codeLenses: CodeLens[]){
+function sendCodeLenses(documentURI: string, codeLenses: CodeLens[]){
 	if(!codeLenses)
 		codeLenses = [];
 	connection.sendNotification("dockerlive/didChangeCodeLenses",{
+		uri: documentURI,
 		codeLenses: codeLenses
 	});
 }

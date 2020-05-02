@@ -115,7 +115,7 @@ export class DynamicAnalysis {
 			return;
 		}
 
-		this.sendCodeLenses(this.codeLenses);
+		this.sendCodeLenses(this.document.uri, this.codeLenses);
 	}
 
 	publishDiagnostics() {
