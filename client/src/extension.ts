@@ -19,6 +19,7 @@ let client: LanguageClient;
 let performanceCurrentPanel: vscode.WebviewPanel | undefined;
 let filesystemCurrentPanel: vscode.WebviewPanel | undefined;
 let initialData: any;
+let currentDocumentUri: string;
 
 export async function activate(context: vscode.ExtensionContext) {
 	let pGraphs = new PerformanceGraphs();
@@ -74,8 +75,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 
 		client.onNotification("dockerlive/didChangeCodeLenses", (data) => {
-			codeLensProvider.didChangeCodeLenses(data.codeLenses);
+			if(data.uri === currentDocumentUri){
+				codeLensProvider.didChangeCodeLenses(data.uri, data.codeLenses);
+			}
 		})
+	});
+
+	currentDocumentUri = vscode.window.activeTextEditor.document.uri.toString();
+
+	vscode.window.onDidChangeActiveTextEditor((editor : vscode.TextEditor) => {
+		if (editor && editor.document.uri.scheme === "file"){
+			currentDocumentUri = editor.document.uri.toString();
+		}
 	});
 }
 
@@ -284,7 +295,7 @@ class DockerfileCodeLensProvider implements vscode.CodeLensProvider {
 	private _onDidChangeCodeLenses: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
     public readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
 
-	private codeLenses: vscode.CodeLens[] = [];
+	private codeLenses = {};
 
 	constructor(){
 		vscode.languages.registerCodeLensProvider({
@@ -292,13 +303,13 @@ class DockerfileCodeLensProvider implements vscode.CodeLensProvider {
 		},this);
 	}
 
-	didChangeCodeLenses(codeLenses: vscode.CodeLens[]){
-		this.codeLenses = codeLenses;
+	didChangeCodeLenses(documentURI: string, codeLenses: vscode.CodeLens[]){
+		this.codeLenses[documentURI] = codeLenses;
 		this._onDidChangeCodeLenses.fire();
 	}
 
-	provideCodeLenses(_document: vscode.TextDocument): vscode.CodeLens[] {
-		return this.codeLenses;
+	provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+		return this.codeLenses[document.uri.toString()];
 	}
 
 	resolveCodeLens(codeLens: vscode.CodeLens): vscode.CodeLens{
