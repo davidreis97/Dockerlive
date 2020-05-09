@@ -8,7 +8,7 @@ This is an early version which is still under development. As such, some feature
 
 Developed within the scope of the final thesis of a MSc in Informatics and Computer Engineering.
 
-## REQUREMENTS
+## REQUIREMENTS
 
 - [Docker Engine](https://www.docker.com/) (>= v19.03.0)
 - [Nmap](https://nmap.org/)
@@ -35,3 +35,7 @@ Feedback generated:
 
 - [Docker Icon](https://iconscout.com/icons/docker) by [Icons8](https://iconscout.com/contributors/icons8) on [Iconscout](Iconscout)
 - [Arrow Icon](https://iconscout.com/icons/arrow) by [Mohit Gandhi](https://iconscout.com/contributors/mcgandhi61) on [Iconscout](Iconscout)
+
+## TELEMETRY
+
+Dockerlive collects usage data using Azure Application Insights in order to help better understand the usage of the extension. If you don’t wish to send usage data, you can set the telemetry.enableTelemetry setting to false. `Telemetry.md` contains a full description of the gathered data.

@@ -14,23 +14,32 @@ import {
 } from 'vscode-languageclient';
 import { PerformanceGraphs } from './performance';
 import { FilesystemVisualizer } from './filesystem';
+import { Analytics } from './analytics';
 
 let client: LanguageClient;
+let analytics: Analytics;
 let performanceCurrentPanel: vscode.WebviewPanel | undefined;
 let filesystemCurrentPanel: vscode.WebviewPanel | undefined;
 let initialData: any;
 let currentDocumentUri: string;
 
 export async function activate(context: vscode.ExtensionContext) {
+	let dockerlive = vscode.extensions.getExtension("david-reis.dockerlive");
+
+	analytics = new Analytics(dockerlive.id,dockerlive.packageJSON.version);
+	context.subscriptions.push(analytics.reporter);
+
 	let pGraphs = new PerformanceGraphs();
 	let fsViz = new FilesystemVisualizer();
 
 	vscode.commands.registerCommand('dockerlive.stop', () => {
 		client.sendNotification("dockerlive/stop");
+		analytics.sendEvent("stopContainer");
 	});
 
 	vscode.commands.registerCommand('dockerlive.restart', () => {
 		client.sendNotification("dockerlive/restart");
+		analytics.sendEvent("restartContainer");
 	});
 
 	vscode.commands.registerCommand('dockerlive.openShell', () => {
@@ -39,6 +48,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	vscode.commands.registerCommand('dockerlive.toggle', () => {
 		client.sendNotification("dockerlive/toggle");
+		analytics.sendEvent("toggleAnalysis");
 	});
 
 	let codeLensProvider = new DockerfileCodeLensProvider();
@@ -72,6 +82,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					return;
 				}
 
+				analytics.sendEvent("openShell",{command:command});
 				const terminal = vscode.window.createTerminal("Dockerlive Container");
 				terminal.sendText(command);
 				terminal.show();
@@ -79,13 +90,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 
 		client.onNotification("dockerlive/didChangeCodeLenses", (data) => {
-			if(data.uri === currentDocumentUri){
+			if(data.uri === currentDocumentUri || !currentDocumentUri){
 				codeLensProvider.didChangeCodeLenses(data.uri, data.codeLenses);
 			}
 		})
 	});
 
-	currentDocumentUri = vscode.window.activeTextEditor.document.uri.toString();
+	if(vscode.window.activeTextEditor)
+		currentDocumentUri = vscode.window.activeTextEditor.document.uri.toString();
 
 	vscode.window.onDidChangeActiveTextEditor((editor : vscode.TextEditor) => {
 		if (editor && editor.document.uri.scheme === "file"){
@@ -125,15 +137,20 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 			} else {
 				filesystemCurrentPanel.reveal();
 			}
+			analytics.startEvent("viewFilesystem");
 
 			filesystemCurrentPanel.onDidChangeViewState((e) => {
 				if(e.webviewPanel.visible){
+					analytics.startEvent("viewFilesystem");
 					sendPartitionedFilesystemData(initialData);
+				}else{
+					analytics.stopEvent("viewFilesystem");
 				}
 			})
 
 			filesystemCurrentPanel.onDidDispose((_e) => {
 				filesystemCurrentPanel = null;
+				analytics.stopEvent("viewFilesystem");
 			});
 
 			const cssPath = vscode.Uri.file(
@@ -149,26 +166,6 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 			if(initialData){
 				sendPartitionedFilesystemData(initialData);
 			}
-
-			filesystemCurrentPanel.webview.onDidReceiveMessage(
-				message => {
-					/*
-					switch (message.command) {
-						case 'stop':
-							vscode.commands.executeCommand("dockerlive.stop");
-							return;
-						case 'restartBuild':
-							vscode.commands.executeCommand("dockerlive.restart");
-							return;
-						case 'openShell':
-							vscode.commands.executeCommand("dockerlive.openShell");
-							return;
-					}
-					*/
-				},
-				undefined,
-				context.subscriptions
-			);
 		})
 	);
 }
@@ -193,9 +190,11 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 			} else {
 				performanceCurrentPanel.reveal();
 			}
+			analytics.startEvent("viewPerformance");
 
 			performanceCurrentPanel.onDidDispose((_e) => {
 				performanceCurrentPanel = null;
+				analytics.stopEvent("viewPerformance");
 			})
 
 			const cssPath = vscode.Uri.file(
@@ -216,7 +215,10 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 
 			performanceCurrentPanel.onDidChangeViewState((e) => {
 				if(e.webviewPanel.visible){
+					analytics.startEvent("viewPerformance");
 					performanceCurrentPanel.webview.postMessage(pGraphs.getCurrent());
+				}else{
+					analytics.stopEvent("viewPerformance");
 				}
 			})
 
@@ -288,6 +290,8 @@ export function deactivate(): Thenable<void> | undefined {
 	if (!client) {
 		return undefined;
 	}
+	analytics.stopAllEvents();
+	analytics.reporter.dispose();
 	client.sendNotification("dockerlive/stop");
 	return client.stop();
 }

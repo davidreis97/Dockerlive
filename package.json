@@ -6,7 +6,7 @@
 	"description": "Live Programming environment for Dockerfiles",
 	"author": "David Reis",
 	"license": "MIT",
-	"version": "1.0.14",
+	"version": "1.0.15",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/davidreis97/Dockerlive.git"
@@ -107,6 +107,7 @@
 	},
 	"dependencies": {
 		"@types/tar-fs": "^1.16.2",
+		"@types/uuid": "^7.0.3",
 		"@types/xml2js": "^0.4.5",
 		"dockerfile-ast": "0.0.20",
 		"dockerode": "^3.1.0",
@@ -115,6 +116,8 @@
 		"strip-ansi": "^6.0.0",
 		"table": "^5.4.6",
 		"tar-stream": "^2.1.2",
+		"uuid": "^8.0.0",
+		"vscode-extension-telemetry": "^0.1.5",
 		"vscode-languageserver": "^6.1.0",
 		"vscode-languageserver-protocol": "^3.15.1",
 		"vscode-languageserver-types": "^3.15.1",
