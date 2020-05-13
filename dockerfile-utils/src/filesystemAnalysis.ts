@@ -71,7 +71,6 @@ function extractTarStream(stream, entry_callback: Function, finish_callback?: Fu
 
 // Merges two filesystems and returns a filesystem with the resulting merge and a filesystem with just the changes
 // b overwrites a
-// !- TODO - CHECK IF IT WORKS WITH A FOLDER DELETION WITH OTHER FILES INSIDE IT
 function mergeLayers(a : FilesystemEntryCollection, b: PreliminaryFilesystemEntry[]) : [FilesystemEntryCollection, FilesystemEntryCollection, number] {
 	let mergedCollection : FilesystemEntryCollection;
 	let changesCollection : FilesystemEntryCollection = {};
@@ -243,7 +242,7 @@ export function getFilesystem(this: DynamicAnalysis, imageID: string){
 		}, () => {
 			let orderedLayerIDs = manifest[0].Layers.map((value,_index,_arr) => value.match(/[0-9a-fA-F]+(?=\/)/)[0]);
 			
-			let previousLayer;
+			let previousLayer: FilesystemEntryCollection;
 			for (let layerID of orderedLayerIDs){
 				let newProcessedLayers = mergeLayers(previousLayer,preliminaryLayers[layerID]);
 				processedLayers.push({id: layerID, fs: [newProcessedLayers[0],newProcessedLayers[1]], size: newProcessedLayers[2]});

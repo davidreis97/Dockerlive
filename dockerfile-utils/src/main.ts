@@ -195,6 +195,10 @@ let lastDocumentUri: string;
  */
 export function validate(document: TextDocument, sendDiagnostics?: Function, sendProgress?: Function, sendPerformanceStats?: Function, sendFilesystemData ?: Function, sendCodeLenses?: Function, settings?: ValidatorSettings): Diagnostic[] {
     if(lastDocumentUri && document.uri !== lastDocumentUri){
+        if(validator){
+            validator.stopAnalysis();
+        }
+
         validator = new Validator();
     }
     

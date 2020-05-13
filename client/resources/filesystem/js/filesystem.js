@@ -176,7 +176,7 @@ function createEntry(filepath, filename, entry, depth, childrenCount){
         tr.classList.add("clickable");
         if(childrenCount == 1){
             size.innerText = childrenCount + " item"
-        }else if(childrenCount > 1){
+        }else if(childrenCount > 1 || childrenCount == 0){
             size.innerText = childrenCount + " items"
         }
 

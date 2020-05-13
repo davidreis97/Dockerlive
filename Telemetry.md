@@ -1,6 +1,6 @@
 # Telemetry
 
-Dockerlive collects usage data and sends it to a personal Azure account in order to help better understand the usage of the extension. If you don’t wish to send usage data, you can set the telemetry.enableTelemetry setting to false.
+Dockerlive collects usage data using Azure Application Insights in order to help better understand the usage of the extension. If you don’t wish to send usage data, you can set the telemetry.enableTelemetry setting to false.
 
 ## Gathered events
 
