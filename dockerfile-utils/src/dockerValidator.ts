@@ -362,7 +362,11 @@ export class Validator {
             }
         }
 
-        if (!foundError && this.dynAnalEnabled) {
+        if (foundError) {
+            if (this.dynamicAnalysis) {
+                this.dynamicAnalysis.destroy();
+            }
+        }else if(this.dynAnalEnabled){
             if (this.dynamicAnalysis && (this.dynamicAnalysis.document.version > document.version)) {
                 return;
             } else {
