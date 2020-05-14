@@ -184,7 +184,7 @@ connection.onInitialized(() => {
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
 	setServiceCapabilities(params.capabilities);
-	applyEditSupport = params.capabilities.workspace && params.capabilities.workspace.applyEdit === true;
+	applyEditSupport = params.capabilities.workspace && params.capabilities.workspace.applyEdit === true && params.initializationOptions.provideCommands === true;
 	documentChangesSupport = params.capabilities.workspace && params.capabilities.workspace.workspaceEdit && params.capabilities.workspace.workspaceEdit.documentChanges === true;
 	configurationSupport = params.capabilities.workspace && params.capabilities.workspace.configuration === true;
 	const renamePrepareSupport = params.capabilities.textDocument && params.capabilities.textDocument.rename && params.capabilities.textDocument.rename.prepareSupport === true;
@@ -193,7 +193,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 	return {
 		capabilities: {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
-			codeActionProvider: applyEditSupport,
+			codeActionProvider: applyEditSupport ,
 			completionProvider: {
 				resolveProvider: true,
 				triggerCharacters: [
@@ -219,7 +219,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 					CommandIds.CONVERT_TO_AS,
 					CommandIds.REMOVE_EMPTY_CONTINUATION_LINE
 				]
-			} : undefined,
+			} :  undefined,
 			documentFormattingProvider: true,
 			documentRangeFormattingProvider: true,
 			documentOnTypeFormattingProvider: {

@@ -13,7 +13,6 @@ import { SemanticTokens } from 'vscode-languageserver-protocol/lib/protocol.sema
  * An interface for logging errors encountered in the language service.
  */
 export interface ILogger {
-
     log(message: string): void;
 }
 

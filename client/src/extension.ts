@@ -264,10 +264,13 @@ async function initializeLanguageServer(context: vscode.ExtensionContext): Promi
 		}
 	};
 
+	let dockerMicrosoftExtensionExists = vscode.extensions.getExtension("ms-azuretools.vscode-docker") != undefined;
+
 	// Options to control the language client
 	let clientOptions: LanguageClientOptions = {
 		// Register the server for plain text documents
 		documentSelector: [{ scheme: 'file', language: 'dockerfile' }],
+		initializationOptions: { provideCommands: !dockerMicrosoftExtensionExists }
 	};
 
 	// Create the language client and start the client.
