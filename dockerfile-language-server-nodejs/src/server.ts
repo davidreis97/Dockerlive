@@ -40,6 +40,8 @@ service.setLogger({
 	}
 });
 
+let provideStaticAnalysis: boolean = true;
+
 /**
  * Whether the client supports the workspace/applyEdit request.
  */
@@ -184,12 +186,13 @@ connection.onInitialized(() => {
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
 	setServiceCapabilities(params.capabilities);
+	provideStaticAnalysis = params.initializationOptions.provideCommands;
 	applyEditSupport = params.capabilities.workspace && params.capabilities.workspace.applyEdit === true && params.initializationOptions.provideCommands === true;
 	documentChangesSupport = params.capabilities.workspace && params.capabilities.workspace.workspaceEdit && params.capabilities.workspace.workspaceEdit.documentChanges === true;
 	configurationSupport = params.capabilities.workspace && params.capabilities.workspace.configuration === true;
 	const renamePrepareSupport = params.capabilities.textDocument && params.capabilities.textDocument.rename && params.capabilities.textDocument.rename.prepareSupport === true;
 	const semanticTokensSupport = params.capabilities.textDocument && (params.capabilities.textDocument as any).semanticTokens;
-	codeActionQuickFixSupport = supportsCodeActionQuickFixes(params.capabilities);
+	codeActionQuickFixSupport = supportsCodeActionQuickFixes(params.capabilities) && params.initializationOptions.provideCommands;
 	return {
 		capabilities: {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -392,6 +395,9 @@ function sendDiagnostics(documentURI: string, diagnostics: Diagnostic[]){
 	if(!documentURI){
 		return;
 	}
+	if(!provideStaticAnalysis){
+		diagnostics = diagnostics.filter((diag,_i,_a) => diag.source != "dockerfile-utils")
+	}
 	connection.sendDiagnostics({uri: documentURI, diagnostics: diagnostics});
 }
 
@@ -520,7 +526,51 @@ connection.onDidChangeConfiguration((change) => {
 	}
 });
 
+connection.onDidOpenTextDocument((didOpenTextDocumentParams: DidOpenTextDocumentParams): void => {
+	let document = TextDocument.create(didOpenTextDocumentParams.textDocument.uri, didOpenTextDocumentParams.textDocument.languageId, didOpenTextDocumentParams.textDocument.version, didOpenTextDocumentParams.textDocument.text);
+	documents[didOpenTextDocumentParams.textDocument.uri] = document;
+	validateTextDocument(document);
+});
+
+connection.onDidChangeTextDocument((didChangeTextDocumentParams: DidChangeTextDocumentParams): void => {
+	let document = documents[didChangeTextDocumentParams.textDocument.uri];
+	let buffer = document.getText();
+	let content = buffer;
+	let changes = didChangeTextDocumentParams.contentChanges;
+	for (let i = 0; i < changes.length; i++) {
+		const change = changes[i] as any;
+		if (!change.range && !change.rangeLength) {
+			// no ranges defined, the text is the entire document then
+			buffer = change.text;
+			break;
+		}
+
+		let offset = document.offsetAt(change.range.start);
+		let end = null;
+		if (change.range.end) {
+			end = document.offsetAt(change.range.end);
+		} else {
+			end = offset + change.rangeLength;
+		}
+		buffer = buffer.substring(0, offset) + change.text + buffer.substring(end);
+	}
+	document = TextDocument.create(didChangeTextDocumentParams.textDocument.uri, document.languageId, didChangeTextDocumentParams.textDocument.version, buffer);
+	documents[didChangeTextDocumentParams.textDocument.uri] = document;
+	if (content !== buffer) {
+		validateTextDocument(document);
+	}
+});
+
+connection.onDidCloseTextDocument((didCloseTextDocumentParams: DidCloseTextDocumentParams): void => {
+	validatorConfigurations.delete(didCloseTextDocumentParams.textDocument.uri);
+	connection.sendDiagnostics({ uri: didCloseTextDocumentParams.textDocument.uri, diagnostics: [] });
+	delete documents[didCloseTextDocumentParams.textDocument.uri];
+});
+
 connection.onCompletion((textDocumentPosition: TextDocumentPositionParams): PromiseLike<CompletionItem[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(textDocumentPosition.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeCompletionItems(document.getText(), textDocumentPosition.position);
@@ -530,6 +580,13 @@ connection.onCompletion((textDocumentPosition: TextDocumentPositionParams): Prom
 });
 
 connection.onSignatureHelp((textDocumentPosition: TextDocumentPositionParams): PromiseLike<SignatureHelp> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res({
+			signatures: [],
+			activeSignature: null,
+			activeParameter: null,
+		}));
+	}
 	return getDocument(textDocumentPosition.textDocument.uri).then((document) => {
 		if (document !== null) {
 			return service.computeSignatureHelp(document.getText(), textDocumentPosition.position);
@@ -547,6 +604,9 @@ connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
 });
 
 connection.onHover((textDocumentPosition: TextDocumentPositionParams): PromiseLike<Hover> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res(null));
+	}
 	return getDocument(textDocumentPosition.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeHover(document.getText(), textDocumentPosition.position);
@@ -556,6 +616,9 @@ connection.onHover((textDocumentPosition: TextDocumentPositionParams): PromiseLi
 });
 
 connection.onDocumentHighlight((textDocumentPosition: TextDocumentPositionParams): PromiseLike<DocumentHighlight[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(textDocumentPosition.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeHighlightRanges(document.getText(), textDocumentPosition.position);
@@ -565,6 +628,9 @@ connection.onDocumentHighlight((textDocumentPosition: TextDocumentPositionParams
 });
 
 connection.onCodeAction((codeActionParams: CodeActionParams): Command[] | PromiseLike<CodeAction[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	if (applyEditSupport && codeActionParams.context.diagnostics.length > 0) {
 		let commands = service.computeCodeActions(codeActionParams.textDocument, codeActionParams.range, codeActionParams.context);
 		if (codeActionQuickFixSupport) {
@@ -590,6 +656,9 @@ connection.onCodeAction((codeActionParams: CodeActionParams): Command[] | Promis
 });
 
 function computeWorkspaceEdit(uri: string, document: TextDocument, command: string, args: any[]): WorkspaceEdit {
+	if(!provideStaticAnalysis){
+		return null;
+	}
 	let edits = service.computeCommandEdits(document.getText(), command, args);
 	if (edits) {
 		if (documentChangesSupport) {
@@ -626,6 +695,9 @@ connection.onExecuteCommand((params: ExecuteCommandParams): void => {
 });
 
 connection.onDefinition((textDocumentPosition: TextDocumentPositionParams): PromiseLike<Location> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res(null));
+	}
 	return getDocument(textDocumentPosition.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeDefinition(textDocumentPosition.textDocument, document.getText(), textDocumentPosition.position);
@@ -635,6 +707,9 @@ connection.onDefinition((textDocumentPosition: TextDocumentPositionParams): Prom
 });
 
 connection.onRenameRequest((params: RenameParams): PromiseLike<WorkspaceEdit> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res(null));
+	}
 	return getDocument(params.textDocument.uri).then((document) => {
 		if (document) {
 			let edits = service.computeRename(params.textDocument, document.getText(), params.position, params.newName);
@@ -649,6 +724,9 @@ connection.onRenameRequest((params: RenameParams): PromiseLike<WorkspaceEdit> =>
 });
 
 connection.onPrepareRename((params: TextDocumentPositionParams): PromiseLike<Range> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res(null));
+	}
 	return getDocument(params.textDocument.uri).then((document) => {
 		if (document) {
 			return service.prepareRename(document.getText(), params.position);
@@ -658,6 +736,9 @@ connection.onPrepareRename((params: TextDocumentPositionParams): PromiseLike<Ran
 });
 
 connection.onDocumentSymbol((documentSymbolParams: DocumentSymbolParams): PromiseLike<SymbolInformation[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(documentSymbolParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeSymbols(documentSymbolParams.textDocument, document.getText());
@@ -667,6 +748,9 @@ connection.onDocumentSymbol((documentSymbolParams: DocumentSymbolParams): Promis
 });
 
 connection.onDocumentFormatting((documentFormattingParams: DocumentFormattingParams): PromiseLike<TextEdit[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(documentFormattingParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.format(document.getText(), documentFormattingParams.options);
@@ -676,6 +760,9 @@ connection.onDocumentFormatting((documentFormattingParams: DocumentFormattingPar
 });	
 
 connection.onDocumentRangeFormatting((rangeFormattingParams: DocumentRangeFormattingParams): PromiseLike<TextEdit[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(rangeFormattingParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.formatRange(document.getText(), rangeFormattingParams.range, rangeFormattingParams.options);
@@ -685,6 +772,9 @@ connection.onDocumentRangeFormatting((rangeFormattingParams: DocumentRangeFormat
 });
 
 connection.onDocumentOnTypeFormatting((onTypeFormattingParams: DocumentOnTypeFormattingParams): PromiseLike<TextEdit[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(onTypeFormattingParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.formatOnType(document.getText(), onTypeFormattingParams.position, onTypeFormattingParams.ch, onTypeFormattingParams.options);
@@ -694,6 +784,9 @@ connection.onDocumentOnTypeFormatting((onTypeFormattingParams: DocumentOnTypeFor
 });
 
 connection.onDocumentLinks((documentLinkParams: DocumentLinkParams): PromiseLike<DocumentLink[]> => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(documentLinkParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeLinks(document.getText());
@@ -707,6 +800,9 @@ connection.onDocumentLinkResolve((documentLink: DocumentLink): DocumentLink => {
 });
 
 connection.onFoldingRanges((foldingRangeParams: FoldingRangeRequestParam) => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res([]));
+	}
 	return getDocument(foldingRangeParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeFoldingRanges(document.getText());
@@ -715,13 +811,12 @@ connection.onFoldingRanges((foldingRangeParams: FoldingRangeRequestParam) => {
 	});
 });
 
-connection.onDidOpenTextDocument((didOpenTextDocumentParams: DidOpenTextDocumentParams): void => {
-	let document = TextDocument.create(didOpenTextDocumentParams.textDocument.uri, didOpenTextDocumentParams.textDocument.languageId, didOpenTextDocumentParams.textDocument.version, didOpenTextDocumentParams.textDocument.text);
-	documents[didOpenTextDocumentParams.textDocument.uri] = document;
-	validateTextDocument(document);
-});
-
 connection.languages.semanticTokens.on((semanticTokenParams: SemanticTokensParams) => {
+	if(!provideStaticAnalysis){
+		return new Promise((res) => res({
+			data: []
+		}));
+	}
 	return getDocument(semanticTokenParams.textDocument.uri).then((document) => {
 		if (document) {
 			return service.computeSemanticTokens(document.getText());
@@ -730,41 +825,6 @@ connection.languages.semanticTokens.on((semanticTokenParams: SemanticTokensParam
 			data: []
 		};
 	});
-});
-
-connection.onDidChangeTextDocument((didChangeTextDocumentParams: DidChangeTextDocumentParams): void => {
-	let document = documents[didChangeTextDocumentParams.textDocument.uri];
-	let buffer = document.getText();
-	let content = buffer;
-	let changes = didChangeTextDocumentParams.contentChanges;
-	for (let i = 0; i < changes.length; i++) {
-		const change = changes[i] as any;
-		if (!change.range && !change.rangeLength) {
-			// no ranges defined, the text is the entire document then
-			buffer = change.text;
-			break;
-		}
-
-		let offset = document.offsetAt(change.range.start);
-		let end = null;
-		if (change.range.end) {
-			end = document.offsetAt(change.range.end);
-		} else {
-			end = offset + change.rangeLength;
-		}
-		buffer = buffer.substring(0, offset) + change.text + buffer.substring(end);
-	}
-	document = TextDocument.create(didChangeTextDocumentParams.textDocument.uri, document.languageId, didChangeTextDocumentParams.textDocument.version, buffer);
-	documents[didChangeTextDocumentParams.textDocument.uri] = document;
-	if (content !== buffer) {
-		validateTextDocument(document);
-	}
-});
-
-connection.onDidCloseTextDocument((didCloseTextDocumentParams: DidCloseTextDocumentParams): void => {
-	validatorConfigurations.delete(didCloseTextDocumentParams.textDocument.uri);
-	connection.sendDiagnostics({ uri: didCloseTextDocumentParams.textDocument.uri, diagnostics: [] });
-	delete documents[didCloseTextDocumentParams.textDocument.uri];
 });
 
 // setup complete, start listening for a client connection
