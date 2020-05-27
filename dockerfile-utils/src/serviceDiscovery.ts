@@ -52,7 +52,10 @@ export function runServiceDiscovery(this: DynamicAnalysis) {
 
 		const mappings = data.NetworkSettings.Ports;
 		for (let i = 0; i < rangesInFile.length; i++) {
-			mappedPorts.push(parseInt(mappings[ports[i] + "/" + protocols[i]][0].HostPort));
+			let portMapping = mappings[ports[i] + "/" + protocols[i]];
+			if(portMapping && portMapping[0] && portMapping[0].HostPort){
+				mappedPorts.push(parseInt(portMapping[0].HostPort));
+			}
 		}
 
 		let tcpMappedPorts = mappedPorts.filter((_value, index, _array) => protocols[index] == "tcp");
