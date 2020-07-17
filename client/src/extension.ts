@@ -131,7 +131,8 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 					'Filesystem', // Title of the panel displayed to the user
 					columnToShowIn, // Editor column to show the new webview panel in.
 					{
-						enableScripts: true
+						enableScripts: true,
+						localResourceRoots: [vscode.Uri.file(context.extensionPath)]
 					} // Webview options.
 				);
 			} else {
@@ -161,7 +162,7 @@ async function initializeFilesystemWebview(context: vscode.ExtensionContext, fsV
 				path.join(context.extensionPath, 'client', 'resources', 'filesystem', 'js', 'filesystem.js')
 			);
 
-			filesystemCurrentPanel.webview.html = fsViz.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath);
+			filesystemCurrentPanel.webview.html = fsViz.getHTML(filesystemCurrentPanel.webview.asWebviewUri(cssPath),filesystemCurrentPanel.webview.asWebviewUri(jsPath));
 
 			if(initialData){
 				sendPartitionedFilesystemData(initialData);
@@ -185,6 +186,7 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 					columnToShowIn, // Editor column to show the new webview panel in.
 					{
 						enableScripts: true,
+						localResourceRoots: [vscode.Uri.file(context.extensionPath)]
 					} // Webview options.
 				);
 			} else {
@@ -209,7 +211,7 @@ async function initializePerformanceWebview(context: vscode.ExtensionContext, pG
 				path.join(context.extensionPath, 'client', 'resources', 'performance', 'js', 'Chart@2.9.3.min.js')
 			);
 
-			performanceCurrentPanel.webview.html = pGraphs.getHTML("vscode-resource:"+cssPath.fsPath,"vscode-resource:"+jsPath.fsPath,"vscode-resource:"+chartjsPath.fsPath);
+			performanceCurrentPanel.webview.html = pGraphs.getHTML(performanceCurrentPanel.webview.asWebviewUri(cssPath),performanceCurrentPanel.webview.asWebviewUri(jsPath),performanceCurrentPanel.webview.asWebviewUri(chartjsPath));
 
 			performanceCurrentPanel.webview.postMessage(pGraphs.getCurrent());
 
