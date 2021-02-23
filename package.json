@@ -6,7 +6,7 @@
 	"description": "Live Programming environment for Dockerfiles",
 	"author": "David Reis",
 	"license": "MIT",
-	"version": "1.0.18",
+	"version": "1.0.19",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/davidreis97/Dockerlive.git"
@@ -19,7 +19,7 @@
 		"dockerfile"
 	],
 	"engines": {
-		"vscode": "^1.42.1"
+		"vscode": "^1.53.2"
 	},
 	"activationEvents": [
 		"onLanguage:dockerfile",
