@@ -4,9 +4,7 @@ Live programming environment for Dockerfiles.
 
 ## DISCLAIMER
 
-This is an early version which is still under development. As such, some features may be unstable.
-
-Developed within the scope of the final thesis of a MSc in Informatics and Computer Engineering.
+This version of Dockerlive was developed within the scope of the final thesis of a MSc in Informatics and Computer Engineering. The most up-to-date version under active development can be found in this repository: https://github.com/SoftwareForHumans/Dockerlive
 
 ## REQUIREMENTS
 
